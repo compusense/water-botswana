@@ -13,7 +13,7 @@ app.use(express.static('public'));
 // ========================================
 const db = new sqlite3.Database('./waterbot.db');
 
-// Create tables
+// Create all tables
 db.serialize(() => {
     // Users table
     db.run(`CREATE TABLE IF NOT EXISTS users (
@@ -83,16 +83,16 @@ app.get('/api/stats', (req, res) => {
     const stats = {};
     
     db.get(`SELECT COUNT(*) as total FROM users`, (err, row) => {
-        stats.totalUsers = row.total;
+        stats.totalUsers = row ? row.total : 0;
         
         db.get(`SELECT COUNT(*) as pending FROM faults WHERE status = 'pending'`, (err, row) => {
-            stats.pendingFaults = row.pending;
+            stats.pendingFaults = row ? row.pending : 0;
             
             db.get(`SELECT COUNT(*) as today FROM messages_log WHERE date(created_at) = date('now')`, (err, row) => {
-                stats.todayMessages = row.today;
+                stats.todayMessages = row ? row.today : 0;
                 
                 db.get(`SELECT COUNT(*) as month FROM users WHERE datetime(registered_at) >= datetime('now', '-30 days')`, (err, row) => {
-                    stats.newUsersMonth = row.month;
+                    stats.newUsersMonth = row ? row.month : 0;
                     res.json(stats);
                 });
             });
@@ -103,14 +103,14 @@ app.get('/api/stats', (req, res) => {
 // Get all users
 app.get('/api/users', (req, res) => {
     db.all(`SELECT * FROM users ORDER BY registered_at DESC`, (err, rows) => {
-        res.json(rows);
+        res.json(rows || []);
     });
 });
 
 // Get faults with location
 app.get('/api/faults', (req, res) => {
     db.all(`SELECT * FROM faults ORDER BY reported_at DESC`, (err, rows) => {
-        res.json(rows);
+        res.json(rows || []);
     });
 });
 
@@ -142,10 +142,10 @@ app.post('/api/broadcast', (req, res) => {
         
         db.run(`INSERT INTO broadcasts (message, target_area, scheduled_for, status, recipient_count) 
                 VALUES (?, ?, ?, 'pending', ?)`,
-            [message, targetArea || 'all', scheduledFor || new Date().toISOString(), users.length],
+            [message, targetArea || 'all', scheduledFor || new Date().toISOString(), users ? users.length : 0],
             (err) => {
                 if (err) res.json({ error: err.message });
-                else res.json({ success: true, recipients: users.length });
+                else res.json({ success: true, recipients: users ? users.length : 0 });
             });
     });
 });
@@ -153,14 +153,14 @@ app.post('/api/broadcast', (req, res) => {
 // Get broadcasts history
 app.get('/api/broadcasts', (req, res) => {
     db.all(`SELECT * FROM broadcasts ORDER BY scheduled_for DESC`, (err, rows) => {
-        res.json(rows);
+        res.json(rows || []);
     });
 });
 
 // Get meter readings
 app.get('/api/readings', (req, res) => {
     db.all(`SELECT * FROM meter_readings ORDER BY submitted_at DESC`, (err, rows) => {
-        res.json(rows);
+        res.json(rows || []);
     });
 });
 
@@ -181,23 +181,27 @@ app.get('/api/analytics', (req, res) => {
             FROM messages_log 
             WHERE created_at >= datetime('now', '-7 days')
             GROUP BY date(created_at)`, (err, rows) => {
-        analytics.messagesByDay = rows;
+        analytics.messagesByDay = rows || [];
         
         // Fault types distribution
         db.all(`SELECT fault_type, COUNT(*) as count FROM faults GROUP BY fault_type`, (err, rows) => {
-            analytics.faultTypes = rows;
+            analytics.faultTypes = rows || [];
             res.json(analytics);
         });
     });
 });
 
-// Mock: Store incoming WhatsApp data (call this from your bot webhook)
+// INGEST ENDPOINT - Connect this to your WhatsApp bot
 app.post('/api/ingest', (req, res) => {
     const { phone, message, direction, meterNumber, faultData, readingData } = req.body;
     
+    console.log(`📥 Ingesting data from ${phone}`);
+    
     // Store message
-    db.run(`INSERT INTO messages_log (user_phone, direction, message) VALUES (?, ?, ?)`,
-        [phone, direction, message]);
+    if (message) {
+        db.run(`INSERT INTO messages_log (user_phone, direction, message) VALUES (?, ?, ?)`,
+            [phone, direction, message]);
+    }
     
     // Update or create user
     db.run(`INSERT INTO users (phone, meter_number, last_active) 
@@ -224,7 +228,9 @@ app.post('/api/ingest', (req, res) => {
     res.json({ success: true });
 });
 
-// Serve dashboard
+// ========================================
+// SERVE DASHBOARD
+// ========================================
 app.get('/dashboard', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
@@ -237,4 +243,5 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
     console.log(`📊 Dashboard running on http://localhost:${PORT}`);
     console.log(`🔗 Visit: http://localhost:${PORT}/dashboard`);
+    console.log(`📡 API endpoint: http://localhost:${PORT}/api`);
 });
