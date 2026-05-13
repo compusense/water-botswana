@@ -304,22 +304,28 @@ async function handleMessage(from, message, msgType, mediaInfo = null) {
     }
     
     // Menu command
-    if (text === 'hi' || text === 'menu' || text === 'start') {
-        await sendMessage(from, `💧 *WATER UTILITY BOTSWANA* 💧
-        
-🇧🇼 Welcome! What would you like to do?
+if (text === 'hi' || text === 'menu' || text === 'start') {
+    await sendMessage(from, `💧 *WATER UTILITIES CORPORATION - BOTSWANA* 💧
 
-1️⃣ *Check Balance*
-2️⃣ *Pay Bill*
-3️⃣ *Submit Meter Reading*
-4️⃣ *Report Fault*
-5️⃣ *Payment History*
+🇧🇼 *Official WUC Customer Care*
 
-Reply with the number or command.
+Welcome to the WUC WhatsApp Service!
 
-📝 Need to link your meter? Just type your meter number (e.g., GBE-00412)`);
-        return;
-    }
+*What would you like to do?*
+
+1️⃣ *Check Balance* - View your water bill
+2️⃣ *Pay Bill* - Make a payment
+3️⃣ *Submit Meter Reading* - Send your reading
+4️⃣ *Report Fault* - Burst pipe, leak, etc.
+5️⃣ *Payment History* - View past payments
+
+*📞 Emergency?* Call 0800 600 222
+
+Type your meter number (e.g., GBE-00412) to link your account.
+
+*Serving Botswana with Excellence since 1970*`);
+    return;
+}
     
     // Check Balance
     if (text === '1' || text === 'balance' || text === 'check balance') {
