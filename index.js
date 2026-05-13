@@ -1,36 +1,215 @@
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
-
-const app = express();
-app.use(express.json());
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
+const cors = require('cors');
 
 // ========================================
-// SESSIONS & DATABASE
+// DASHBOARD SERVER (Port 3001)
 // ========================================
+const dashboardApp = express();
+dashboardApp.use(cors());
+dashboardApp.use(express.json());
+dashboardApp.use(express.static('public'));
+
+// Database setup
+const db = new sqlite3.Database('./waterbot.db');
+
+db.serialize(() => {
+    db.run(`CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        phone TEXT UNIQUE,
+        meter_number TEXT,
+        name TEXT,
+        area TEXT,
+        registered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_active DATETIME,
+        is_blocked BOOLEAN DEFAULT 0
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS faults (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_phone TEXT,
+        fault_type TEXT,
+        description TEXT,
+        latitude REAL,
+        longitude REAL,
+        photo_url TEXT,
+        status TEXT DEFAULT 'pending',
+        reported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        resolved_at DATETIME,
+        technician TEXT
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS broadcasts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        message TEXT,
+        target_area TEXT,
+        scheduled_for DATETIME,
+        sent_at DATETIME,
+        status TEXT DEFAULT 'pending',
+        recipient_count INTEGER
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS meter_readings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_phone TEXT,
+        meter_number TEXT,
+        reading REAL,
+        photo_url TEXT,
+        submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        approved BOOLEAN DEFAULT 0
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS messages_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_phone TEXT,
+        direction TEXT,
+        message TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+});
+
+// Dashboard API endpoints
+dashboardApp.get('/api/stats', (req, res) => {
+    const stats = {};
+    db.get(`SELECT COUNT(*) as total FROM users`, (err, row) => {
+        stats.totalUsers = row ? row.total : 0;
+        db.get(`SELECT COUNT(*) as pending FROM faults WHERE status = 'pending'`, (err, row) => {
+            stats.pendingFaults = row ? row.pending : 0;
+            db.get(`SELECT COUNT(*) as today FROM messages_log WHERE date(created_at) = date('now')`, (err, row) => {
+                stats.todayMessages = row ? row.today : 0;
+                db.get(`SELECT COUNT(*) as month FROM users WHERE datetime(registered_at) >= datetime('now', '-30 days')`, (err, row) => {
+                    stats.newUsersMonth = row ? row.month : 0;
+                    res.json(stats);
+                });
+            });
+        });
+    });
+});
+
+dashboardApp.get('/api/users', (req, res) => {
+    db.all(`SELECT * FROM users ORDER BY registered_at DESC`, (err, rows) => {
+        res.json(rows || []);
+    });
+});
+
+dashboardApp.get('/api/faults', (req, res) => {
+    db.all(`SELECT * FROM faults ORDER BY reported_at DESC`, (err, rows) => {
+        res.json(rows || []);
+    });
+});
+
+dashboardApp.post('/api/faults/:id/status', (req, res) => {
+    const { status, technician } = req.body;
+    db.run(`UPDATE faults SET status = ?, technician = ?, resolved_at = CURRENT_TIMESTAMP WHERE id = ?`, 
+        [status, technician, req.params.id], (err) => {
+            res.json({ success: !err });
+        });
+});
+
+dashboardApp.post('/api/broadcast', (req, res) => {
+    const { message, targetArea, scheduledFor } = req.body;
+    let query = `SELECT phone FROM users WHERE is_blocked = 0`;
+    if (targetArea && targetArea !== 'all') query += ` AND area = '${targetArea}'`;
+    
+    db.all(query, (err, users) => {
+        db.run(`INSERT INTO broadcasts (message, target_area, scheduled_for, status, recipient_count) 
+                VALUES (?, ?, ?, 'pending', ?)`,
+            [message, targetArea || 'all', scheduledFor || new Date().toISOString(), users ? users.length : 0],
+            (err) => {
+                res.json({ success: !err, recipients: users ? users.length : 0 });
+            });
+    });
+});
+
+dashboardApp.get('/api/broadcasts', (req, res) => {
+    db.all(`SELECT * FROM broadcasts ORDER BY scheduled_for DESC`, (err, rows) => {
+        res.json(rows || []);
+    });
+});
+
+dashboardApp.get('/api/readings', (req, res) => {
+    db.all(`SELECT * FROM meter_readings ORDER BY submitted_at DESC`, (err, rows) => {
+        res.json(rows || []);
+    });
+});
+
+dashboardApp.post('/api/readings/:id/approve', (req, res) => {
+    db.run(`UPDATE meter_readings SET approved = 1 WHERE id = ?`, [req.params.id], (err) => {
+        res.json({ success: !err });
+    });
+});
+
+dashboardApp.get('/api/analytics', (req, res) => {
+    db.all(`SELECT date(created_at) as day, COUNT(*) as count 
+            FROM messages_log WHERE created_at >= datetime('now', '-7 days')
+            GROUP BY date(created_at)`, (err, rows) => {
+        const messagesByDay = rows || [];
+        db.all(`SELECT fault_type, COUNT(*) as count FROM faults GROUP BY fault_type`, (err, rows) => {
+            res.json({ messagesByDay, faultTypes: rows || [] });
+        });
+    });
+});
+
+dashboardApp.post('/api/ingest', (req, res) => {
+    const { phone, message, direction, meterNumber, faultData, readingData } = req.body;
+    
+    if (message) {
+        db.run(`INSERT INTO messages_log (user_phone, direction, message) VALUES (?, ?, ?)`,
+            [phone, direction, message]);
+    }
+    
+    db.run(`INSERT INTO users (phone, meter_number, last_active) 
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(phone) DO UPDATE SET last_active = CURRENT_TIMESTAMP,
+            meter_number = COALESCE(?, meter_number)`,
+        [phone, meterNumber, meterNumber]);
+    
+    if (faultData) {
+        db.run(`INSERT INTO faults (user_phone, fault_type, description, latitude, longitude) 
+                VALUES (?, ?, ?, ?, ?)`,
+            [phone, faultData.type, faultData.description, faultData.lat, faultData.lng]);
+    }
+    
+    if (readingData) {
+        db.run(`INSERT INTO meter_readings (user_phone, meter_number, reading) 
+                VALUES (?, ?, ?)`,
+            [phone, readingData.meter, readingData.value]);
+    }
+    
+    res.json({ success: true });
+});
+
+dashboardApp.get('/dashboard', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+dashboardApp.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Start dashboard on port 3001
+const DASHBOARD_PORT = 3001;
+dashboardApp.listen(DASHBOARD_PORT, () => {
+    console.log(`📊 Dashboard running on port ${DASHBOARD_PORT}`);
+});
+
+// ========================================
+// WHATSAPP BOT SERVER (Port 3000)
+// ========================================
+const botApp = express();
+botApp.use(express.json());
+
 const sessions = {};
 const accounts = {
     'GBE-00412': { name: 'Kefilwe Moyo', balance: 247.50, address: 'Gaborone West', area: 'Gaborone' },
     'GBE-00891': { name: 'Thabo Sithole', balance: 0, address: 'Gaborone North', area: 'Gaborone' },
     'FTB-00234': { name: 'Mpho Nkwe', balance: 512.00, address: 'Francistown', area: 'Francistown' },
-    'LBE-00123': { name: 'Botswana Water Corp', balance: 189.50, address: 'Lobatse', area: 'Lobatse' },
-    'GBE-00999': { name: 'Demo Customer', balance: 75.25, address: 'Gaborone CBD', area: 'Gaborone' }
+    'LBE-00123': { name: 'Botswana Water Corp', balance: 189.50, address: 'Lobatse', area: 'Lobatse' }
 };
 
-// Fault types with emojis
-const faultTypes = {
-    '1': { emoji: '💥', name: 'Burst Pipe', description: 'Water gushing/leaking heavily' },
-    '2': { emoji: '🚱', name: 'No Water Flow', description: 'No water coming from taps' },
-    '3': { emoji: '📉', name: 'Low Pressure', description: 'Weak water flow' },
-    '4': { emoji: '💧', name: 'Leakage', description: 'Small leak or drip' },
-    '5': { emoji: '🏾', name: 'Dirty Water', description: 'Brown/discolored water' },
-    '6': { emoji: '🔊', name: 'Meter Issue', description: 'Meter not working' },
-    '7': { emoji: '🆘', name: 'Other', description: 'Other problem' }
-};
-
-// ========================================
-// SEND MESSAGE FUNCTIONS
-// ========================================
 async function sendMessage(to, text) {
     try {
         const url = `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`;
@@ -53,709 +232,108 @@ async function sendMessage(to, text) {
     }
 }
 
-// Add this function to your bot's index.js
-async function sendToDashboard(phone, message, direction, meterNumber = null, faultData = null, readingData = null) {
+async function sendToDashboard(phone, message, direction, meterNumber = null, faultData = null) {
     try {
-        // Use your Railway dashboard URL
-        const dashboardUrl = process.env.DASHBOARD_URL || 'http://localhost:3001';
-        await axios.post(`${dashboardUrl}/api/ingest`, {
-            phone, message, direction, meterNumber, faultData, readingData
+        await axios.post(`http://localhost:${DASHBOARD_PORT}/api/ingest`, {
+            phone, message, direction, meterNumber, faultData
         });
-        console.log(`📊 Data sent to dashboard`);
     } catch(error) {
-        console.log(`⚠️ Dashboard not available: ${error.message}`);
+        console.log('Dashboard ingest failed');
     }
 }
 
-// Send interactive list menu
-async function sendListMenu(to, title, body, sections, buttonText = '📋 Select Option') {
-    try {
-        const url = `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`;
-        
-        const menu = {
-            messaging_product: 'whatsapp',
-            to: to,
-            type: 'interactive',
-            interactive: {
-                type: 'list',
-                header: { type: 'text', text: title },
-                body: { text: body },
-                footer: { text: '🇧🇼 Botswana Water Utility' },
-                action: {
-                    button: buttonText,
-                    sections: sections
-                }
-            }
-        };
-        
-        await axios.post(url, menu, {
-            headers: {
-                'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        console.log(`✅ List menu sent to ${to}`);
-        return true;
-    } catch (error) {
-        console.error('❌ Menu error:', error.response?.data || error.message);
-        return false;
-    }
-}
-
-// Send button reply menu
-async function sendButtonMenu(to, bodyText, buttons) {
-    try {
-        const url = `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`;
-        
-        const menu = {
-            messaging_product: 'whatsapp',
-            to: to,
-            type: 'interactive',
-            interactive: {
-                type: 'button',
-                body: { text: bodyText },
-                action: {
-                    buttons: buttons.map((btn, idx) => ({
-                        type: 'reply',
-                        reply: { id: `btn_${idx}`, title: btn.title }
-                    }))
-                }
-            }
-        };
-        
-        await axios.post(url, menu, {
-            headers: {
-                'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        console.log(`✅ Button menu sent to ${to}`);
-        return true;
-    } catch (error) {
-        console.error('❌ Button error:', error.response?.data || error.message);
-        return false;
-    }
-}
-
-// Send request for location
-async function requestLocation(to) {
-    try {
-        const url = `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`;
-        
-        const request = {
-            messaging_product: 'whatsapp',
-            to: to,
-            type: 'interactive',
-            interactive: {
-                type: 'location_request_message',
-                body: { text: '📍 Please share your location so we can dispatch a technician to the right place.' },
-                action: { name: 'send_location' }
-            }
-        };
-        
-        await axios.post(url, request, {
-            headers: {
-                'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        console.log(`✅ Location request sent to ${to}`);
-        return true;
-    } catch (error) {
-        console.error('❌ Location error:', error.response?.data || error.message);
-        return false;
-    }
-}
-
-// ========================================
-// MAIN MENU
-// ========================================
-async function showMainMenu(to) {
-    const sections = [
-        {
-            title: '💧 Water Services',
-            rows: [
-                { id: 'balance', title: '💰 Check Balance', description: 'View your current water bill' },
-                { id: 'pay', title: '💳 Pay Bill', description: 'Make a payment' },
-                { id: 'reading', title: '📸 Submit Reading', description: 'Send meter reading with photo' }
-            ]
-        },
-        {
-            title: '🚨 Emergency & Support',
-            rows: [
-                { id: 'fault', title: '🔧 Report Fault', description: 'Burst pipe, leak, no water' },
-                { id: 'history', title: '📜 Payment History', description: 'View past transactions' },
-                { id: 'contact', title: '📞 Contact Us', description: 'Customer support info' }
-            ]
-        },
-        {
-            title: 'ℹ️ Account',
-            rows: [
-                { id: 'link', title: '🔗 Link Meter', description: 'Connect your meter number' },
-                { id: 'status', title: '📊 Service Status', description: 'Check water supply status' }
-            ]
-        }
-    ];
-    
-    await sendListMenu(to, '💧 WATER UTILITY BOTSWANA', 'Welcome! What would you like to do today?', sections, '📋 MAIN MENU');
-}
-
-// ========================================
-// FAULT SUBMENU
-// ========================================
-async function showFaultMenu(to) {
-    const sections = [{
-        title: '🚨 Select Fault Type',
-        rows: [
-            { id: 'fault_1', title: '💥 Burst Pipe', description: 'Water gushing/leaking heavily' },
-            { id: 'fault_2', title: '🚱 No Water Flow', description: 'No water coming from taps' },
-            { id: 'fault_3', title: '📉 Low Pressure', description: 'Weak water flow' },
-            { id: 'fault_4', title: '💧 Leakage', description: 'Small leak or drip' },
-            { id: 'fault_5', title: '🏾 Dirty Water', description: 'Brown/discolored water' },
-            { id: 'fault_6', title: '🔊 Meter Issue', description: 'Meter not working' },
-            { id: 'fault_7', title: '🆘 Other', description: 'Other problem' }
-        ]
-    }];
-    
-    await sendListMenu(to, '🔧 REPORT A FAULT', 'Please select the type of fault you are experiencing:', sections, '🚨 SELECT FAULT');
-}
-
-// ========================================
-// PAYMENT SUBMENU
-// ========================================
-async function showPaymentMenu(to, balance) {
-    await sendButtonMenu(to, `💰 Amount Due: P${balance}\n\nHow would you like to pay?`, [
-        { title: 'Orange Money' },
-        { title: 'Bank Transfer' },
-        { title: 'In Person' },
-        { title: 'Cancel' }
-    ]);
-}
-
-// ========================================
-// MAIN HANDLER
-// ========================================
 async function handleMessage(from, message, msgType, mediaInfo = null) {
-    console.log(`📱 ${from} [${msgType}]: ${msgType === 'text' ? message?.body : msgType}`);
-    
-    // Initialize session
-    if (!sessions[from]) {
-        sessions[from] = { step: 'menu', meter: null, faultType: null, context: {} };
-    }
-    
+    if (!sessions[from]) sessions[from] = { step: 'menu', meter: null };
     const session = sessions[from];
     
-    // ========================================
-    // HANDLE MEDIA ATTACHMENTS
-    // ========================================
-    
-    // Handle location sharing
-    if (msgType === 'location') {
-        const lat = mediaInfo.latitude;
-        const lng = mediaInfo.longitude;
-        
-        await sendMessage(from, 
-            `📍 *LOCATION RECEIVED* 📍\n\n` +
-            `Coordinates: ${lat}, ${lng}\n` +
-            `🗺️ Map: https://maps.google.com/?q=${lat},${lng}\n\n` +
-            `✅ *FAULT REPORT COMPLETE*\n\n` +
-            `📋 Fault Type: ${session.faultType?.name || 'Not specified'}\n` +
-            `🆔 Reference: BWT-${Date.now().toString().slice(-8)}\n` +
-            `👷 Status: Dispatched\n\n` +
-            `A technician will be at your location within 24 hours.\n\n` +
-            `Thank you for helping us improve service in Botswana! 🇧🇼`
-        );
-        
-        session.step = 'menu';
-        await showMainMenu(from);
-        return;
-    }
-    
-    // Handle image (meter reading)
-    if (msgType === 'image') {
-        await sendMessage(from,
-            `📸 *METER READING RECEIVED* 📸\n\n` +
-            `✅ Reference: MET-${Date.now().toString().slice(-8)}\n` +
-            `📅 Date: ${new Date().toLocaleDateString()}\n\n` +
-            `Thank you for submitting your meter reading!\n` +
-            `We'll update your account within 24 hours.\n\n` +
-            `💡 Tip: For faster processing, also type your reading number.`
-        );
-        
-        session.step = 'menu';
-        await showMainMenu(from);
-        return;
-    }
-    
-    // Handle voice note
-    if (msgType === 'audio' || msgType === 'voice') {
-        await sendMessage(from,
-            `🎙️ *VOICE NOTE RECEIVED* 🎙️\n\n` +
-            `✅ Reference: VN-${Date.now().toString().slice(-8)}\n\n` +
-            `We've received your voice message regarding the fault.\n` +
-            `Our team will review it and contact you shortly.\n\n` +
-            `📞 For urgent issues, please call our hotline: 0800 600 222`
-        );
-        
-        session.step = 'menu';
-        await showMainMenu(from);
-        return;
-    }
-    
-    // Get text message
     let text = '';
-    let interactiveId = '';
+    if (msgType === 'text') text = message?.body?.toLowerCase().trim() || '';
     
-    if (msgType === 'text') {
-        text = message?.body?.toLowerCase().trim() || '';
-    } else if (msgType === 'interactive') {
-        interactiveId = message?.list_reply?.id || message?.button_reply?.id || '';
-        text = interactiveId.toLowerCase();
-        console.log(`🎯 Interactive selection: "${interactiveId}"`);
+    await sendToDashboard(from, text, 'incoming', session.meter);
+    
+    if (text === 'hi' || text === 'menu') {
+        await sendMessage(from, `💧 WATER UTILITY BOTSWANA\n\n1️⃣ Balance\n2️⃣ Pay Bill\n3️⃣ Meter Reading\n4️⃣ Report Fault\n\nReply with number or command.`);
+        return;
     }
     
-    // ========================================
-    // STATE MACHINE
-    // ========================================
+    if (text === '1' || text === 'balance') {
+        if (session.meter) {
+            const acc = accounts[session.meter];
+            await sendMessage(from, `💰 Balance: P${acc.balance}\nDue: End of month`);
+        } else {
+            await sendMessage(from, `Enter meter number (e.g., GBE-00412):`);
+            session.step = 'awaiting_meter';
+        }
+        return;
+    }
     
-    // State: Awaiting meter number for linking
     if (session.step === 'awaiting_meter') {
-        const meterMatch = text.toUpperCase().match(/[A-Z]{3}-\d{5}/);
-        if (meterMatch) {
-            const meter = meterMatch[0];
-            const account = accounts[meter];
-            
-            if (account) {
-                session.meter = meter;
-                session.step = 'menu';
-                await sendMessage(from,
-                    `✅ *ACCOUNT LINKED SUCCESSFULLY* ✅\n\n` +
-                    `📋 Meter Number: ${meter}\n` +
-                    `👤 Account Name: ${account.name}\n` +
-                    `📍 Address: ${account.address}\n` +
-                    `🏙️ Area: ${account.area}\n` +
-                    `💰 Current Balance: P${account.balance.toFixed(2)}\n\n` +
-                    `What would you like to do today?`
-                );
-                await showMainMenu(from);
-            } else {
-                await sendMessage(from,
-                    `❌ *METER NOT FOUND* ❌\n\n` +
-                    `"${meter}" does not exist in our system.\n\n` +
-                    `📋 Valid test meters:\n` +
-                    `• GBE-00412 (Gaborone)\n` +
-                    `• FTB-00234 (Francistown)\n` +
-                    `• LBE-00123 (Lobatse)\n\n` +
-                    `Please try again or type "menu" to cancel.`
-                );
-            }
-        } else if (text === 'menu') {
-            session.step = 'menu';
-            await showMainMenu(from);
-        } else {
-            await sendMessage(from,
-                `🔑 *ENTER YOUR METER NUMBER* 🔑\n\n` +
-                `Please enter your meter number in this format:\n` +
-                `[Area Code]-[5 digits]\n\n` +
-                `📝 Examples:\n` +
-                `• GBE-00412 (Gaborone)\n` +
-                `• FTB-00234 (Francistown)\n` +
-                `• LBE-00123 (Lobatse)\n\n` +
-                `Type "menu" to cancel.`
-            );
-        }
-        return;
-    }
-    
-    // State: Awaiting payment amount
-    if (session.step === 'awaiting_payment_amount') {
-        const amount = parseFloat(text);
-        if (!isNaN(amount) && amount > 0) {
-            await sendMessage(from,
-                `💳 *PAYMENT INSTRUCTIONS* 💳\n\n` +
-                `Amount: P${amount.toFixed(2)}\n\n` +
-                `📱 *Orange Money:* Dial *151# and follow prompts\n` +
-                `🏦 *Bank Transfer:* Account 0123456789 (Botswana Water Corp)\n` +
-                `🏢 *In Person:* Any Botswana Water office\n\n` +
-                `✅ Send "PAID" after completing payment.\n` +
-                `❌ Send "CANCEL" to abort.`
-            );
-            session.step = 'awaiting_payment_confirmation';
-            session.pendingAmount = amount;
-        } else {
-            await sendMessage(from,
-                `💰 *ENTER PAYMENT AMOUNT* 💰\n\n` +
-                `Please enter the amount you want to pay.\n` +
-                `📝 Example: 247.50\n\n` +
-                `Or type "cancel" to go back.`
-            );
-        }
-        return;
-    }
-    
-    // State: Awaiting payment confirmation
-    if (session.step === 'awaiting_payment_confirmation') {
-        if (text === 'paid') {
-            await sendMessage(from,
-                `✅ *PAYMENT CONFIRMED* ✅\n\n` +
-                `💰 Amount: P${session.pendingAmount?.toFixed(2) || '0'}\n` +
-                `🆔 Reference: PAY-${Date.now().toString().slice(-8)}\n` +
-                `📅 Date: ${new Date().toLocaleDateString()}\n\n` +
-                `Thank you for your payment!\n` +
-                `A receipt has been sent to your registered email.\n\n` +
-                `🇧🇼 Thank you for being a responsible customer!`
-            );
-            session.step = 'menu';
-            session.pendingAmount = null;
-            await showMainMenu(from);
-        } else if (text === 'cancel') {
-            await sendMessage(from, `❌ Payment cancelled. Returning to main menu.`);
-            session.step = 'menu';
-            await showMainMenu(from);
-        } else {
-            await sendMessage(from, `Type "PAID" when payment is complete or "CANCEL" to abort.`);
-        }
-        return;
-    }
-    
-    // State: Awaiting meter reading
-    if (session.step === 'awaiting_reading') {
-        const reading = parseFloat(text);
-        if (!isNaN(reading) && reading > 0) {
-            await sendMessage(from,
-                `✅ *METER READING SUBMITTED* ✅\n\n` +
-                `📊 Reading: ${reading} m³\n` +
-                `📅 Date: ${new Date().toLocaleDateString()}\n` +
-                `🆔 Reference: RD-${Date.now().toString().slice(-8)}\n\n` +
-                `Thank you for your submission!\n` +
-                `💡 Tip: You can also send a PHOTO of your meter for verification.`
-            );
-            session.step = 'menu';
-            await showMainMenu(from);
-        } else {
-            await sendMessage(from,
-                `📸 *SUBMIT METER READING* 📸\n\n` +
-                `Option 1️⃣: Type your current reading as a number\n` +
-                `📝 Example: 12345\n\n` +
-                `Option 2️⃣: Send a PHOTO of your meter\n` +
-                `📱 Tap 📎 → Camera to take a photo\n\n` +
-                `Type "menu" to cancel.`
-            );
-        }
-        return;
-    }
-    
-    // ========================================
-    // MENU HANDLING
-    // ========================================
-    
-    // Welcome / Main Menu
-    if (text === 'menu' || text === 'hi' || text === 'hello' || text === 'start' || text === 'menu') {
-        await showMainMenu(from);
-        return;
-    }
-    
-    // CHECK BALANCE
-    if (text === 'balance' || interactiveId === 'balance') {
-        if (session.meter) {
-            const account = accounts[session.meter];
-            await sendMessage(from,
-                `💰 *CURRENT WATER BILL* 💰\n\n` +
-                `📋 Meter: ${session.meter}\n` +
-                `👤 Name: ${account.name}\n` +
-                `📍 Address: ${account.address}\n` +
-                `─────────────────\n` +
-                `💵 Balance: P${account.balance.toFixed(2)}\n` +
-                `📅 Due Date: End of month\n` +
-                `⚠️ Late Fee: 5% after due date\n` +
-                `─────────────────\n\n` +
-                `Type "PAY" to make a payment or "MENU" for options.`
-            );
-        } else {
-            await sendMessage(from,
-                `🔑 *METER NUMBER REQUIRED* 🔑\n\n` +
-                `Please enter your meter number to check your balance.\n` +
-                `📝 Example: GBE-00412`
-            );
-            session.step = 'awaiting_meter';
-        }
-        return;
-    }
-    
-    // PAY BILL
-    if (text === 'pay' || text === 'pay bill' || interactiveId === 'pay') {
-        if (session.meter) {
-            const account = accounts[session.meter];
-            if (account.balance > 0) {
-                await sendMessage(from,
-                    `💰 *PAYMENT PORTAL* 💰\n\n` +
-                    `📋 Meter: ${session.meter}\n` +
-                    `💵 Outstanding Balance: P${account.balance.toFixed(2)}\n\n` +
-                    `How much would you like to pay?`
-                );
-                session.step = 'awaiting_payment_amount';
-            } else {
-                await sendMessage(from,
-                    `✅ *NO OUTSTANDING BALANCE* ✅\n\n` +
-                    `Your account is fully paid up.\n` +
-                    `Thank you for being a responsible customer! 🇧🇼`
-                );
-            }
-        } else {
-            await sendMessage(from,
-                `🔑 *METER NUMBER REQUIRED* 🔑\n\n` +
-                `Please enter your meter number to make a payment.\n` +
-                `📝 Example: GBE-00412`
-            );
-            session.step = 'awaiting_meter';
-        }
-        return;
-    }
-    
-    // SUBMIT METER READING
-    if (text === 'reading' || text === 'meter reading' || interactiveId === 'reading') {
-        if (session.meter) {
-            await sendMessage(from,
-                `📸 *SUBMIT METER READING* 📸\n\n` +
-                `📋 Meter: ${session.meter}\n\n` +
-                `Please send your current meter reading:\n` +
-                `1️⃣ Type the number (e.g., 12345)\n` +
-                `2️⃣ Or send a PHOTO of your meter\n\n` +
-                `📱 Tap 📎 → Camera to take a photo`
-            );
-            session.step = 'awaiting_reading';
-        } else {
-            await sendMessage(from,
-                `🔑 *METER NUMBER REQUIRED* 🔑\n\n` +
-                `Please enter your meter number first.\n` +
-                `📝 Example: GBE-00412`
-            );
-            session.step = 'awaiting_meter';
-        }
-        return;
-    }
-    
-    // REPORT FAULT - Show fault types menu
-    if (text === 'fault' || text === 'report fault' || interactiveId === 'fault') {
-        await showFaultMenu(from);
-        return;
-    }
-    
-    // Handle fault type selection
-    if (interactiveId.startsWith('fault_')) {
-        const faultNum = interactiveId.split('_')[1];
-        const fault = faultTypes[faultNum];
-        
-        if (fault) {
-            session.faultType = fault;
-            
-            await sendMessage(from,
-                `🔧 *FAULT REPORTING* 🔧\n\n` +
-                `Selected: ${fault.emoji} ${fault.name}\n` +
-                `Description: ${fault.description}\n\n` +
-                `📋 Step 1 of 3: Fault type recorded ✅\n\n` +
-                `📍 Step 2: Please share your location\n` +
-                `📱 Tap 📎 → Location → Send Current Location\n\n` +
-                `🎙️ You can also send a VOICE NOTE describing the issue.\n` +
-                `📸 Or send a PHOTO of the problem.`
-            );
-            
-            session.step = 'awaiting_fault_location';
-        }
-        return;
-    }
-    
-    // Handle fault description from text (if user types instead of selects)
-    if (session.step === 'awaiting_fault_description') {
-        session.faultType = { name: 'Custom Report', emoji: '📝' };
-        await sendMessage(from,
-            `🔧 *FAULT REPORTED* 🔧\n\n` +
-            `Issue: ${text}\n\n` +
-            `📍 Please share your location:\n` +
-            `📱 Tap 📎 → Location → Send Current Location\n\n` +
-            `🎙️ You can also send a VOICE NOTE or PHOTO.`
-        );
-        session.step = 'awaiting_fault_location';
-        return;
-    }
-    
-    // Payment History
-    if (text === 'history' || text === 'payment history' || interactiveId === 'history') {
-        await sendMessage(from,
-            `📜 *PAYMENT HISTORY* 📜\n\n` +
-            `Recent transactions:\n` +
-            `─────────────────\n` +
-            `🗓️ April 2026: P247.50 ✅\n` +
-            `🗓️ March 2026: P189.00 ✅\n` +
-            `🗓️ February 2026: P210.50 ✅\n` +
-            `🗓️ January 2026: P195.00 ✅\n` +
-            `─────────────────\n\n` +
-            `💡 Full history available at our office or upon request.\n` +
-            `📞 Customer Care: 0800 600 222`
-        );
-        return;
-    }
-    
-    // Link Meter
-    if (text === 'link' || text === 'link meter' || interactiveId === 'link') {
-        await sendMessage(from,
-            `🔗 *LINK YOUR METER NUMBER* 🔗\n\n` +
-            `Please enter your meter number in this format:\n` +
-            `[Area Code]-[5 digits]\n\n` +
-            `📝 Examples:\n` +
-            `• GBE-00412 (Gaborone)\n` +
-            `• FTB-00234 (Francistown)\n` +
-            `• LBE-00123 (Lobatse)\n\n` +
-            `Type your meter number now:`
-        );
-        session.step = 'awaiting_meter';
-        return;
-    }
-    
-    // Service Status
-    if (text === 'status' || text === 'service status' || interactiveId === 'status') {
-        await sendMessage(from,
-            `📊 *SERVICE STATUS* 📊\n\n` +
-            `📍 Gaborone: 🟢 Normal\n` +
-            `📍 Francistown: 🟢 Normal\n` +
-            `📍 Lobatse: 🟡 Maintenance (8am-12pm)\n` +
-            `📍 Selebi-Phikwe: 🟢 Normal\n` +
-            `📍 Molepolole: 🟢 Normal\n\n` +
-            `⚠️ Planned maintenance notices are sent 48 hours in advance.\n\n` +
-            `📞 Report outages: 0800 600 222`
-        );
-        return;
-    }
-    
-    // Contact Us
-    if (text === 'contact' || text === 'contact us' || interactiveId === 'contact') {
-        await sendMessage(from,
-            `📞 *CONTACT US* 📞\n\n` +
-            `🏢 Head Office: Gaborone International Commerce Park\n` +
-            `📞 Customer Care: 0800 600 222\n` +
-            `📧 Email: support@waterbotswana.co.bw\n` +
-            `🌐 Website: www.waterbotswana.co.bw\n` +
-            `⏰ Hours: Mon-Fri 8am-5pm\n` +
-            `🚨 Emergency: 24/7 hotline available\n\n` +
-            `🇧🇼 Serving Botswana since 1970`
-        );
-        return;
-    }
-    
-    // Direct meter number entry (if user types a meter number without going through menu)
-    const meterMatch = text.toUpperCase().match(/[A-Z]{3}-\d{5}/);
-    if (meterMatch) {
-        const meter = meterMatch[0];
+        const meter = text.toUpperCase();
         const account = accounts[meter];
-        
         if (account) {
             session.meter = meter;
-            await sendMessage(from,
-                `✅ *METER LINKED* ✅\n\n` +
-                `📋 Meter: ${meter}\n` +
-                `👤 Name: ${account.name}\n` +
-                `💰 Balance: P${account.balance.toFixed(2)}\n` +
-                `📍 Address: ${account.address}\n\n` +
-                `Type "MENU" to see all options.`
-            );
+            session.step = 'menu';
+            await sendMessage(from, `✅ Account found!\nMeter: ${meter}\nName: ${account.name}\nBalance: P${account.balance}`);
         } else {
-            await sendMessage(from,
-                `❌ *METER NOT FOUND* ❌\n\n` +
-                `"${meter}" does not exist.\n\n` +
-                `📋 Valid test meters:\n` +
-                `• GBE-00412\n` +
-                `• FTB-00234\n` +
-                `• LBE-00123`
-            );
+            await sendMessage(from, `❌ Meter "${meter}" not found.\nTry: GBE-00412`);
         }
         return;
     }
     
-    // Default fallback
-    if (text) {
-        await sendMessage(from,
-            `❓ I didn't understand "${text}".\n\n` +
-            `Please type "MENU" to see available options.`);
+    if (text === '4' || text === 'fault') {
+        await sendMessage(from, `Describe the problem:`);
+        session.step = 'awaiting_fault';
+        return;
     }
+    
+    if (session.step === 'awaiting_fault') {
+        await sendToDashboard(from, text, 'incoming', session.meter, {
+            type: 'Reported Issue',
+            description: text,
+            lat: mediaInfo?.latitude,
+            lng: mediaInfo?.longitude
+        });
+        await sendMessage(from, `✅ Fault reported! Reference: ${Date.now().toString().slice(-8)}\nTechnician will be dispatched.`);
+        session.step = 'menu';
+        return;
+    }
+    
+    await sendMessage(from, `Type "menu" for options`);
 }
 
-// ========================================
-// WEBHOOK ENDPOINTS
-// ========================================
-app.get('/webhook', (req, res) => {
-    console.log('🔗 Webhook verification request');
+botApp.get('/webhook', (req, res) => {
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
-    
     if (token === process.env.VERIFY_TOKEN) {
-        console.log('✅ Webhook verified successfully');
         res.status(200).send(challenge);
     } else {
-        console.log('❌ Webhook verification failed');
         res.sendStatus(403);
     }
 });
 
-app.post('/webhook', async (req, res) => {
+botApp.post('/webhook', async (req, res) => {
     try {
         const body = req.body;
-        
         if (body.object === 'whatsapp_business_account') {
-            const entry = body.entry[0];
-            const changes = entry.changes[0];
-            const value = changes.value;
-            
-            if (value.messages && value.messages[0]) {
-                const msg = value.messages[0];
-                const from = msg.from;
-                const type = msg.type;
-                
-                let messageContent = null;
-                let mediaInfo = null;
-                
-                if (type === 'text') {
-                    messageContent = msg.text;
-                } else if (type === 'interactive') {
-                    messageContent = msg.interactive;
-                } else if (type === 'location') {
-                    mediaInfo = { latitude: msg.location.latitude, longitude: msg.location.longitude };
-                } else if (type === 'image') {
-                    mediaInfo = { id: msg.image.id };
-                } else if (type === 'audio' || type === 'voice') {
-                    mediaInfo = { id: msg.audio?.id };
-                }
-                
-                await handleMessage(from, messageContent, type, mediaInfo);
-                // After storing fault in your bot, add:
-await sendToDashboard(from, text, 'incoming', session.meter, {
-    type: fault.name,
-    description: text,
-    lat: mediaInfo?.latitude,
-    lng: mediaInfo?.longitude
-});
+            const msg = body.entry[0].changes[0].value.messages?.[0];
+            if (msg && msg.type === 'text') {
+                await handleMessage(msg.from, msg.text, 'text');
             }
         }
         res.sendStatus(200);
     } catch (error) {
-        console.error('Webhook error:', error.message);
+        console.error(error);
         res.sendStatus(200);
     }
 });
 
-app.get('/', (req, res) => {
-    res.json({
-        status: 'running',
-        service: 'Botswana Water Utility WhatsApp Bot',
-        version: '3.0.0',
-        features: ['Menus', 'Submenus', 'Fault Reporting', 'Location Sharing', 'Photos', 'Voice Notes'],
-        uptime: process.uptime(),
-        timestamp: new Date().toISOString()
-    });
+botApp.get('/', (req, res) => {
+    res.json({ status: 'running', service: 'Botswana Water Bot' });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`💧 Botswana Water Utility Bot v3.0`);
-    console.log(`✅ Features: Interactive Menus | Fault Reports | Location | Photos | Voice`);
+const BOT_PORT = 3000;
+botApp.listen(BOT_PORT, () => {
+    console.log(`🤖 WhatsApp Bot running on port ${BOT_PORT}`);
 });
+
+console.log(`✅ Both services started successfully!`);
