@@ -3,199 +3,236 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Botswana Water Utility Dashboard</title>
+    <title>WUC Botswana - Water Utility Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        * { transition: all 0.2s ease; }
-        .tab-active { border-bottom-2px solid blue; color: blue; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        * { font-family: 'Inter', sans-serif; }
+        .bg-wuc { background-color: #0054A4; }
+        .bg-wuc-teal { background-color: #007A78; }
+        .text-wuc { color: #0054A4; }
+        .border-wuc { border-color: #0054A4; }
+        .hover-wuc:hover { background-color: #003d7a; }
+        .tab-active { border-bottom: 3px solid #007A78; color: #007A78; }
     </style>
 </head>
-<body class="bg-gray-100">
+<body class="bg-gray-50">
     <div class="flex h-screen">
-        <!-- Sidebar -->
-        <div class="w-64 bg-blue-900 text-white">
-            <div class="p-6">
-                <h2 class="text-2xl font-bold">💧 WaterBot</h2>
-                <p class="text-sm opacity-75">Botswana Utility</p>
+        <!-- Sidebar with WUC Branding -->
+        <div class="w-64 bg-wuc text-white shadow-xl">
+            <div class="p-6 border-b border-blue-700">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
+                        <span class="text-2xl">💧</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold">WUC</h2>
+                        <p class="text-xs opacity-75">Botswana</p>
+                    </div>
+                </div>
+                <p class="text-xs mt-2 opacity-75">Water Utilities Corporation</p>
             </div>
             <nav class="mt-6">
-                <a href="#" onclick="showTab('overview')" class="tab-link block px-6 py-3 hover:bg-blue-800" data-tab="overview">
+                <a href="#" onclick="showTab('overview')" class="tab-link block px-6 py-3 hover:bg-blue-700 transition" data-tab="overview">
                     📊 Overview
                 </a>
-                <a href="#" onclick="showTab('users')" class="tab-link block px-6 py-3 hover:bg-blue-800" data-tab="users">
-                    👥 Users
+                <a href="#" onclick="showTab('users')" class="tab-link block px-6 py-3 hover:bg-blue-700 transition" data-tab="users">
+                    👥 Customers
                 </a>
-                <a href="#" onclick="showTab('faults')" class="tab-link block px-6 py-3 hover:bg-blue-800" data-tab="faults">
-                    🚨 Faults
+                <a href="#" onclick="showTab('faults')" class="tab-link block px-6 py-3 hover:bg-blue-700 transition" data-tab="faults">
+                    🚨 Fault Reports
                 </a>
-                <a href="#" onclick="showTab('broadcast')" class="tab-link block px-6 py-3 hover:bg-blue-800" data-tab="broadcast">
+                <a href="#" onclick="showTab('broadcast')" class="tab-link block px-6 py-3 hover:bg-blue-700 transition" data-tab="broadcast">
                     📢 Broadcast
                 </a>
-                <a href="#" onclick="showTab('readings')" class="tab-link block px-6 py-3 hover:bg-blue-800" data-tab="readings">
-                    📸 Readings
+                <a href="#" onclick="showTab('readings')" class="tab-link block px-6 py-3 hover:bg-blue-700 transition" data-tab="readings">
+                    📸 Meter Readings
                 </a>
-                <a href="#" onclick="showTab('analytics')" class="tab-link block px-6 py-3 hover:bg-blue-800" data-tab="analytics">
+                <a href="#" onclick="showTab('analytics')" class="tab-link block px-6 py-3 hover:bg-blue-700 transition" data-tab="analytics">
                     📈 Analytics
                 </a>
             </nav>
+            <div class="absolute bottom-0 w-64 p-4 text-xs text-center opacity-60">
+                <p>© WUC Botswana</p>
+                <p>v2.0 | Customer Service: 0800 600 222</p>
+            </div>
         </div>
 
         <!-- Main Content -->
         <div class="flex-1 overflow-y-auto">
             <div class="p-8">
+                <!-- Header -->
+                <div class="mb-8">
+                    <h1 class="text-3xl font-bold text-wuc">Customer Engagement Platform</h1>
+                    <p class="text-gray-600 mt-1">Real-time monitoring & management for WUC Botswana</p>
+                </div>
+
                 <!-- Overview Tab -->
                 <div id="overview-tab" class="tab-content">
-                    <h1 class="text-3xl font-bold mb-6">Dashboard Overview</h1>
-                    
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                        <div class="bg-white rounded-lg shadow p-6">
-                            <div class="text-3xl font-bold text-blue-600" id="total-users">0</div>
-                            <div class="text-gray-600">Total Users</div>
+                        <div class="bg-white rounded-xl shadow-md p-6 border-l-4 border-wuc">
+                            <div class="text-3xl font-bold text-wuc" id="total-users">0</div>
+                            <div class="text-gray-600 mt-1">Total Customers</div>
+                            <div class="text-xs text-green-600 mt-2">↑ 12% this month</div>
                         </div>
-                        <div class="bg-white rounded-lg shadow p-6">
+                        <div class="bg-white rounded-xl shadow-md p-6 border-l-4 border-red-500">
                             <div class="text-3xl font-bold text-red-600" id="pending-faults">0</div>
-                            <div class="text-gray-600">Pending Faults</div>
+                            <div class="text-gray-600 mt-1">Pending Faults</div>
+                            <div class="text-xs text-orange-600 mt-2">⚠️ Requires attention</div>
                         </div>
-                        <div class="bg-white rounded-lg shadow p-6">
+                        <div class="bg-white rounded-xl shadow-md p-6 border-l-4 border-green-500">
                             <div class="text-3xl font-bold text-green-600" id="today-messages">0</div>
-                            <div class="text-gray-600">Messages Today</div>
+                            <div class="text-gray-600 mt-1">Today's Messages</div>
+                            <div class="text-xs text-gray-500 mt-2">Last 24 hours</div>
                         </div>
-                        <div class="bg-white rounded-lg shadow p-6">
-                            <div class="text-3xl font-bold text-purple-600" id="new-users">0</div>
-                            <div class="text-gray-600">New Users (30d)</div>
+                        <div class="bg-white rounded-xl shadow-md p-6 border-l-4 border-wuc-teal">
+                            <div class="text-3xl font-bold text-wuc-teal" id="new-users">0</div>
+                            <div class="text-gray-600 mt-1">New Customers (30d)</div>
+                            <div class="text-xs text-green-600 mt-2">↑ Growing</div>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div class="bg-white rounded-lg shadow p-6">
-                            <h3 class="font-semibold mb-4">📊 Messages Trend</h3>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                        <div class="bg-white rounded-xl shadow-md p-6">
+                            <h3 class="font-semibold text-gray-800 mb-4">📊 Message Volume Trend</h3>
                             <canvas id="messagesChart" height="200"></canvas>
                         </div>
-                        <div class="bg-white rounded-lg shadow p-6">
-                            <h3 class="font-semibold mb-4">🚨 Fault Distribution</h3>
+                        <div class="bg-white rounded-xl shadow-md p-6">
+                            <h3 class="font-semibold text-gray-800 mb-4">🚨 Fault Distribution</h3>
                             <canvas id="faultsChart" height="200"></canvas>
                         </div>
                     </div>
 
-                    <div class="mt-6 bg-white rounded-lg shadow p-6">
-                        <h3 class="font-semibold mb-4">📍 Recent Faults Map</h3>
-                        <div id="map" style="height: 400px;"></div>
+                    <div class="bg-white rounded-xl shadow-md p-6">
+                        <h3 class="font-semibold text-gray-800 mb-4">📍 Active Fault Locations</h3>
+                        <div id="map" style="height: 400px; border-radius: 12px;"></div>
                     </div>
                 </div>
 
                 <!-- Users Tab -->
                 <div id="users-tab" class="tab-content hidden">
-                    <h1 class="text-3xl font-bold mb-6">👥 User Management</h1>
-                    <div class="bg-white rounded-lg shadow overflow-hidden">
-                        <table class="min-w-full">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left">Phone</th>
-                                    <th class="px-6 py-3 text-left">Meter Number</th>
-                                    <th class="px-6 py-3 text-left">Area</th>
-                                    <th class="px-6 py-3 text-left">Registered</th>
-                                    <th class="px-6 py-3 text-left">Last Active</th>
-                                    <th class="px-6 py-3 text-left">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody id="users-table-body">
-                                <tr><td colspan="6" class="text-center py-4">Loading...</td></tr>
-                            </tbody>
-                        </table>
+                    <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                        <div class="px-6 py-4 bg-wuc text-white">
+                            <h3 class="font-semibold">Customer Directory</h3>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meter Number</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Area</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Registered</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Active</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-table-body" class="divide-y divide-gray-200">
+                                    <tr><td colspan="6" class="text-center py-8 text-gray-500">Loading customers...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Faults Tab -->
                 <div id="faults-tab" class="tab-content hidden">
-                    <h1 class="text-3xl font-bold mb-6">🚨 Fault Reports</h1>
-                    <div class="bg-white rounded-lg shadow overflow-hidden">
-                        <table class="min-w-full">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left">Type</th>
-                                    <th class="px-6 py-3 text-left">User</th>
-                                    <th class="px-6 py-3 text-left">Description</th>
-                                    <th class="px-6 py-3 text-left">Location</th>
-                                    <th class="px-6 py-3 text-left">Status</th>
-                                    <th class="px-6 py-3 text-left">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="faults-table-body">
-                                <tr><td colspan="6" class="text-center py-4">Loading...</td></tr>
-                            </tbody>
-                        </table>
+                    <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                        <div class="px-6 py-4 bg-wuc text-white">
+                            <h3 class="font-semibold">Fault Reports</h3>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="faults-table-body" class="divide-y divide-gray-200">
+                                    <tr><td colspan="6" class="text-center py-8 text-gray-500">Loading faults...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Broadcast Tab -->
                 <div id="broadcast-tab" class="tab-content hidden">
-                    <h1 class="text-3xl font-bold mb-6">📢 Broadcast Message</h1>
-                    
-                    <div class="bg-white rounded-lg shadow p-6 mb-6">
-                        <h3 class="font-semibold mb-4">Send New Broadcast</h3>
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium mb-2">Target Area</label>
-                            <select id="broadcast-area" class="w-full border rounded-lg px-3 py-2">
-                                <option value="all">All Areas</option>
-                                <option value="Gaborone">Gaborone</option>
-                                <option value="Francistown">Francistown</option>
-                                <option value="Lobatse">Lobatse</option>
-                            </select>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-white rounded-xl shadow-md p-6">
+                            <h3 class="font-semibold text-gray-800 mb-4">📢 Send Broadcast</h3>
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Target Area</label>
+                                <select id="broadcast-area" class="w-full border rounded-lg px-4 py-2 focus:ring-wuc focus:border-wuc">
+                                    <option value="all">All Areas (National)</option>
+                                    <option value="Gaborone">Gaborone Region</option>
+                                    <option value="Francistown">Francistown Region</option>
+                                    <option value="Lobatse">Lobatse Region</option>
+                                    <option value="Selebi-Phikwe">Selebi-Phikwe</option>
+                                </select>
+                            </div>
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Message</label>
+                                <textarea id="broadcast-message" rows="5" class="w-full border rounded-lg px-4 py-2" placeholder="Type your broadcast message here..."></textarea>
+                            </div>
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Schedule (Optional)</label>
+                                <input type="datetime-local" id="broadcast-schedule" class="w-full border rounded-lg px-4 py-2">
+                            </div>
+                            <button onclick="sendBroadcast()" class="bg-wuc text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition w-full">
+                                📢 Send Broadcast
+                            </button>
                         </div>
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium mb-2">Message</label>
-                            <textarea id="broadcast-message" rows="4" class="w-full border rounded-lg px-3 py-2" placeholder="Type your broadcast message here..."></textarea>
+                        <div class="bg-white rounded-xl shadow-md p-6">
+                            <h3 class="font-semibold text-gray-800 mb-4">Recent Broadcasts</h3>
+                            <div id="broadcasts-list" class="space-y-3 max-h-96 overflow-y-auto"></div>
                         </div>
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium mb-2">Schedule (optional)</label>
-                            <input type="datetime-local" id="broadcast-schedule" class="border rounded-lg px-3 py-2">
-                        </div>
-                        <button onclick="sendBroadcast()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
-                            📢 Send Broadcast
-                        </button>
-                    </div>
-
-                    <div class="bg-white rounded-lg shadow p-6">
-                        <h3 class="font-semibold mb-4">Recent Broadcasts</h3>
-                        <div id="broadcasts-list"></div>
                     </div>
                 </div>
 
                 <!-- Readings Tab -->
                 <div id="readings-tab" class="tab-content hidden">
-                    <h1 class="text-3xl font-bold mb-6">📸 Meter Readings</h1>
-                    <div class="bg-white rounded-lg shadow overflow-hidden">
-                        <table class="min-w-full">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left">User</th>
-                                    <th class="px-6 py-3 text-left">Meter</th>
-                                    <th class="px-6 py-3 text-left">Reading</th>
-                                    <th class="px-6 py-3 text-left">Submitted</th>
-                                    <th class="px-6 py-3 text-left">Status</th>
-                                    <th class="px-6 py-3 text-left">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="readings-table-body">
-                                <tr><td colspan="6" class="text-center py-4">Loading...</td></tr>
-                            </tbody>
-                        </table>
+                    <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                        <div class="px-6 py-4 bg-wuc text-white">
+                            <h3 class="font-semibold">Meter Reading Submissions</h3>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meter Number</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reading</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="readings-table-body" class="divide-y divide-gray-200">
+                                    <tr><td colspan="6" class="text-center py-8 text-gray-500">Loading readings...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Analytics Tab -->
                 <div id="analytics-tab" class="tab-content hidden">
-                    <h1 class="text-3xl font-bold mb-6">📈 Analytics</h1>
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div class="bg-white rounded-lg shadow p-6">
-                            <h3 class="font-semibold mb-4">User Growth</h3>
+                        <div class="bg-white rounded-xl shadow-md p-6">
+                            <h3 class="font-semibold text-gray-800 mb-4">Customer Growth</h3>
                             <canvas id="userGrowthChart" height="250"></canvas>
                         </div>
-                        <div class="bg-white rounded-lg shadow p-6">
-                            <h3 class="font-semibold mb-4">Popular Features</h3>
+                        <div class="bg-white rounded-xl shadow-md p-6">
+                            <h3 class="font-semibold text-gray-800 mb-4">Feature Usage</h3>
                             <canvas id="featuresChart" height="250"></canvas>
                         </div>
                     </div>
@@ -205,169 +242,150 @@
     </div>
 
     <script>
-        let map;
-        let messagesChart, faultsChart;
+        const API_URL = '';
+        let map, messagesChart, faultsChart;
 
-        // Tab switching
+        async function fetchStats() {
+            const res = await fetch(`${API_URL}/api/stats`);
+            const data = await res.json();
+            document.getElementById('total-users').innerText = data.totalUsers || 0;
+            document.getElementById('pending-faults').innerText = data.pendingFaults || 0;
+            document.getElementById('today-messages').innerText = data.todayMessages || 0;
+            document.getElementById('new-users').innerText = data.newUsersMonth || 0;
+        }
+
         function showTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.add('hidden');
-            });
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
             document.getElementById(`${tabName}-tab`).classList.remove('hidden');
-            
             if (tabName === 'overview') loadOverview();
             if (tabName === 'users') loadUsers();
             if (tabName === 'faults') loadFaults();
             if (tabName === 'readings') loadReadings();
             if (tabName === 'broadcast') loadBroadcasts();
-            if (tabName === 'analytics') loadAnalytics();
         }
 
-        // Load Overview Data
         async function loadOverview() {
-            const res = await fetch('/api/stats');
-            const stats = await res.json();
-            document.getElementById('total-users').innerText = stats.totalUsers || 0;
-            document.getElementById('pending-faults').innerText = stats.pendingFaults || 0;
-            document.getElementById('today-messages').innerText = stats.todayMessages || 0;
-            document.getElementById('new-users').innerText = stats.newUsersMonth || 0;
-            
-            const analytics = await fetch('/api/analytics').then(r => r.json());
-            
+            await fetchStats();
+            const analytics = await fetch(`${API_URL}/api/analytics`).then(r => r.json());
             if (messagesChart) messagesChart.destroy();
             messagesChart = new Chart(document.getElementById('messagesChart'), {
                 type: 'line',
                 data: { labels: analytics.messagesByDay?.map(d => d.day) || [], 
-                        datasets: [{ label: 'Messages', data: analytics.messagesByDay?.map(d => d.count) || [], borderColor: 'blue' }] }
+                        datasets: [{ label: 'Messages', data: analytics.messagesByDay?.map(d => d.count) || [], borderColor: '#0054A4', backgroundColor: 'rgba(0,84,164,0.1)', fill: true }] }
             });
-            
             if (faultsChart) faultsChart.destroy();
             faultsChart = new Chart(document.getElementById('faultsChart'), {
                 type: 'pie',
                 data: { labels: analytics.faultTypes?.map(f => f.fault_type) || [],
-                        datasets: [{ data: analytics.faultTypes?.map(f => f.count) || [], backgroundColor: ['red','orange','yellow','green','blue','purple'] }] }
+                        datasets: [{ data: analytics.faultTypes?.map(f => f.count) || [], backgroundColor: ['#0054A4','#007A78','#E63946','#F4A261','#2A9D8F','#E9C46A'] }] }
             });
-            
-            const faults = await fetch('/api/faults').then(r => r.json());
+            const faults = await fetch(`${API_URL}/api/faults`).then(r => r.json());
             if (map) map.remove();
-            map = L.map('map').setView([-24.6282, 25.9231], 7);
+            map = L.map('map').setView([-22.57, 24.0], 6);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
             faults.filter(f => f.latitude).forEach(f => {
-                L.marker([f.latitude, f.longitude]).addTo(map).bindPopup(`${f.fault_type}<br>${f.description}`);
+                L.marker([f.latitude, f.longitude]).addTo(map).bindPopup(`<b>${f.fault_type}</b><br>${f.description}<br><small>${f.status}</small>`);
             });
         }
 
         async function loadUsers() {
-            const users = await fetch('/api/users').then(r => r.json());
+            const users = await fetch(`${API_URL}/api/users`).then(r => r.json());
             document.getElementById('users-table-body').innerHTML = users.map(u => `
-                <tr class="border-b">
+                <tr class="hover:bg-gray-50">
                     <td class="px-6 py-3">${u.phone}</td>
-                    <td class="px-6 py-3">${u.meter_number || '-'}</td>
+                    <td class="px-6 py-3 font-mono">${u.meter_number || '-'}</td>
+                    <td class="px-6 py-3">${u.name || '-'}</td>
                     <td class="px-6 py-3">${u.area || '-'}</td>
-                    <td class="px-6 py-3">${new Date(u.registered_at).toLocaleDateString()}</td>
-                    <td class="px-6 py-3">${u.last_active ? new Date(u.last_active).toLocaleDateString() : '-'}</td>
-                    <td class="px-6 py-3">${u.is_blocked ? 'Blocked' : 'Active'}</td>
+                    <td class="px-6 py-3 text-sm">${new Date(u.registered_at).toLocaleDateString()}</td>
+                    <td class="px-6 py-3 text-sm">${u.last_active ? new Date(u.last_active).toLocaleDateString() : '-'}</td>
                 </tr>
             `).join('');
         }
 
         async function loadFaults() {
-            const faults = await fetch('/api/faults').then(r => r.json());
+            const faults = await fetch(`${API_URL}/api/faults`).then(r => r.json());
             document.getElementById('faults-table-body').innerHTML = faults.map(f => `
-                <tr class="border-b">
-                    <td class="px-6 py-3">${f.fault_type || '-'}</td>
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-3"><span class="px-2 py-1 rounded text-sm ${f.fault_type === 'Burst Pipe' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}">${f.fault_type || '-'}</span></td>
                     <td class="px-6 py-3">${f.user_phone}</td>
                     <td class="px-6 py-3">${f.description?.substring(0, 50) || '-'}</td>
-                    <td class="px-6 py-3">${f.latitude ? `${f.latitude}, ${f.longitude}` : '-'}</td>
-                    <td class="px-6 py-3"><span class="px-2 py-1 rounded text-sm ${f.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}">${f.status}</span></td>
+                    <td class="px-6 py-3 text-sm">${f.latitude ? `${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}` : '-'}</td>
+                    <td class="px-6 py-3"><span class="px-2 py-1 rounded text-xs ${f.status === 'pending' ? 'bg-red-100 text-red-800' : f.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}">${f.status}</span></td>
                     <td class="px-6 py-3">
-                        <button onclick="markResolved(${f.id})" class="bg-green-500 text-white px-3 py-1 rounded text-sm">Resolve</button>
+                        ${f.status === 'pending' ? `<button onclick="markResolved(${f.id})" class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">Resolve</button>` : '✅ Resolved'}
                     </td>
                 </tr>
             `).join('');
         }
 
         async function loadReadings() {
-            const readings = await fetch('/api/readings').then(r => r.json());
+            const readings = await fetch(`${API_URL}/api/readings`).then(r => r.json());
             document.getElementById('readings-table-body').innerHTML = readings.map(r => `
-                <tr class="border-b">
+                <tr class="hover:bg-gray-50">
                     <td class="px-6 py-3">${r.user_phone}</td>
-                    <td class="px-6 py-3">${r.meter_number}</td>
-                    <td class="px-6 py-3">${r.reading}</td>
-                    <td class="px-6 py-3">${new Date(r.submitted_at).toLocaleDateString()}</td>
-                    <td class="px-6 py-3">${r.approved ? 'Approved' : 'Pending'}</td>
+                    <td class="px-6 py-3 font-mono">${r.meter_number}</td>
+                    <td class="px-6 py-3">${r.reading} m³</td>
+                    <td class="px-6 py-3 text-sm">${new Date(r.submitted_at).toLocaleDateString()}</td>
+                    <td class="px-6 py-3">${r.approved ? '<span class="text-green-600">✓ Approved</span>' : '<span class="text-yellow-600">⏳ Pending</span>'}</td>
                     <td class="px-6 py-3">
-                        ${!r.approved ? `<button onclick="approveReading(${r.id})" class="bg-blue-500 text-white px-3 py-1 rounded text-sm">Approve</button>` : '-'}
+                        ${!r.approved ? `<button onclick="approveReading(${r.id})" class="bg-wuc text-white px-3 py-1 rounded text-sm hover:bg-blue-700">Approve</button>` : '-'}
                     </td>
                 </tr>
             `).join('');
         }
 
         async function loadBroadcasts() {
-            const broadcasts = await fetch('/api/broadcasts').then(r => r.json());
+            const broadcasts = await fetch(`${API_URL}/api/broadcasts`).then(r => r.json());
             document.getElementById('broadcasts-list').innerHTML = broadcasts.map(b => `
-                <div class="border-b py-3">
-                    <p class="font-semibold">${new Date(b.scheduled_for).toLocaleString()}</p>
-                    <p>${b.message}</p>
-                    <p class="text-sm text-gray-600">Target: ${b.target_area || 'All'} | Recipients: ${b.recipient_count} | Status: ${b.status}</p>
+                <div class="border rounded-lg p-3">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="font-semibold text-sm">${new Date(b.scheduled_for).toLocaleString()}</p>
+                            <p class="text-gray-700 text-sm mt-1">${b.message}</p>
+                        </div>
+                        <span class="text-xs px-2 py-1 rounded ${b.status === 'sent' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">${b.status}</span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2">Target: ${b.target_area || 'All'} | Recipients: ${b.recipient_count || 0}</p>
                 </div>
             `).join('');
-        }
-
-        function loadAnalytics() {
-            // Analytics charts initialization
         }
 
         async function sendBroadcast() {
             const message = document.getElementById('broadcast-message').value;
             const targetArea = document.getElementById('broadcast-area').value;
             const scheduledFor = document.getElementById('broadcast-schedule').value;
-            
-            if (!message) {
-                alert('Please enter a message');
-                return;
-            }
-            
-            const res = await fetch('/api/broadcast', {
+            if (!message) { alert('Please enter a message'); return; }
+            const res = await fetch(`${API_URL}/api/broadcast`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message, targetArea, scheduledFor: scheduledFor || undefined })
             });
-            
             const data = await res.json();
             if (data.success) {
-                alert(`Broadcast sent to ${data.recipients} users!`);
+                alert(`Broadcast sent to ${data.recipients} customers!`);
                 document.getElementById('broadcast-message').value = '';
                 loadBroadcasts();
-            } else {
-                alert('Error sending broadcast');
-            }
+            } else alert('Error sending broadcast');
         }
 
         async function markResolved(id) {
-            await fetch(`/api/faults/${id}/status`, {
+            await fetch(`${API_URL}/api/faults/${id}/status`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: 'resolved', technician: 'Admin' })
+                body: JSON.stringify({ status: 'resolved', technician: 'WUC Admin' })
             });
             loadFaults();
-            loadOverview();
+            fetchStats();
         }
 
         async function approveReading(id) {
-            await fetch(`/api/readings/${id}/approve`, { method: 'POST' });
+            await fetch(`${API_URL}/api/readings/${id}/approve`, { method: 'POST' });
             loadReadings();
         }
 
-        // Initialize dashboard
+        // Initialize
         showTab('overview');
-        
-        // Auto-refresh every 30 seconds
-        setInterval(() => {
-            if (document.getElementById('overview-tab') && !document.getElementById('overview-tab').classList.contains('hidden')) {
-                loadOverview();
-            }
-        }, 30000);
+        setInterval(() => { if (document.getElementById('overview-tab') && !document.getElementById('overview-tab').classList.contains('hidden')) loadOverview(); }, 30000);
     </script>
 </body>
 </html>
