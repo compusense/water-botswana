@@ -53,6 +53,20 @@ async function sendMessage(to, text) {
     }
 }
 
+// Add this function to your bot's index.js
+async function sendToDashboard(phone, message, direction, meterNumber = null, faultData = null, readingData = null) {
+    try {
+        // Use your Railway dashboard URL
+        const dashboardUrl = process.env.DASHBOARD_URL || 'http://localhost:3001';
+        await axios.post(`${dashboardUrl}/api/ingest`, {
+            phone, message, direction, meterNumber, faultData, readingData
+        });
+        console.log(`📊 Data sent to dashboard`);
+    } catch(error) {
+        console.log(`⚠️ Dashboard not available: ${error.message}`);
+    }
+}
+
 // Send interactive list menu
 async function sendListMenu(to, title, body, sections, buttonText = '📋 Select Option') {
     try {
@@ -712,6 +726,13 @@ app.post('/webhook', async (req, res) => {
                 }
                 
                 await handleMessage(from, messageContent, type, mediaInfo);
+                // After storing fault in your bot, add:
+await sendToDashboard(from, text, 'incoming', session.meter, {
+    type: fault.name,
+    description: text,
+    lat: mediaInfo?.latitude,
+    lng: mediaInfo?.longitude
+});
             }
         }
         res.sendStatus(200);
