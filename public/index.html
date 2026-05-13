@@ -3,34 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Botswana Water Utility - Admin Portal</title>
+    <title>WUC Botswana - Staff Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        * { font-family: 'Inter', sans-serif; }
+        .bg-wuc { background-color: #0054A4; }
+    </style>
 </head>
 <body class="bg-gradient-to-br from-blue-900 to-blue-700 min-h-screen flex items-center justify-center">
-    <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
         <div class="text-center mb-8">
-            <div class="text-6xl mb-4">💧</div>
-            <h1 class="text-3xl font-bold text-gray-800">Water Utility Botswana</h1>
-            <p class="text-gray-600 mt-2">Admin Dashboard Login</p>
+            <div class="flex justify-center mb-4">
+                <div class="w-20 h-20 bg-wuc rounded-2xl flex items-center justify-center shadow-lg">
+                    <span class="text-4xl">💧</span>
+                </div>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-800">Water Utilities Corporation</h1>
+            <p class="text-gray-600 mt-1">Customer Engagement Portal</p>
+            <p class="text-xs text-gray-500 mt-2">Botswana • Service with Excellence</p>
         </div>
         
         <form id="login-form">
             <div class="mb-4">
-                <label class="block text-gray-700 text-sm font-bold mb-2">Email</label>
-                <input type="email" id="email" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="admin@waterbotswana.co.bw">
+                <label class="block text-gray-700 text-sm font-bold mb-2">Staff Email</label>
+                <input type="email" id="email" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-wuc" placeholder="name@wuc.bw">
             </div>
             <div class="mb-6">
                 <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
-                <input type="password" id="password" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="••••••••">
+                <input type="password" id="password" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-wuc" placeholder="••••••••">
             </div>
-            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition">
+            <button type="submit" class="w-full bg-wuc text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-800 transition">
                 Login to Dashboard
             </button>
         </form>
         
-        <div class="mt-6 text-center text-sm text-gray-600">
-            <p>Demo credentials:</p>
-            <p class="font-mono text-xs">admin@waterbotswana.co.bw / admin123</p>
+        <div class="mt-6 pt-4 border-t text-center text-sm text-gray-600">
+            <p class="font-medium">WUC Customer Service</p>
+            <p class="text-xs mt-1">0800 600 222 | support@wuc.bw</p>
+            <p class="text-xs text-gray-400 mt-3">© Water Utilities Corporation, Botswana</p>
         </div>
     </div>
 
@@ -39,12 +50,10 @@
             e.preventDefault();
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
-            
-            // Simple demo auth
-            if (email === 'admin@waterbotswana.co.bw' && password === 'admin123') {
+            if (email === 'admin@wuc.bw' && password === 'admin123') {
                 window.location.href = '/dashboard';
             } else {
-                alert('Invalid credentials. Use admin@waterbotswana.co.bw / admin123');
+                alert('Invalid credentials. Use admin@wuc.bw / admin123');
             }
         });
     </script>
