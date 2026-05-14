@@ -307,9 +307,9 @@ async function handleMessage(from, message, msgType, mediaInfo = null) {
 if (text === 'hi' || text === 'menu' || text === 'start') {
     await sendMessage(from, `💧 *WATER UTILITIES CORPORATION - BOTSWANA* 💧
 
-🇧🇼 *Official WUC Customer Care*
+*"We keep it flowing, for you."*
 
-Welcome to the WUC WhatsApp Service!
+🇧🇼 Official WUC WhatsApp Service
 
 *What would you like to do?*
 
