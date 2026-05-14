@@ -16,24 +16,22 @@
         .text-wuc { color: #0054A4; }
         .border-wuc { border-color: #0054A4; }
         .hover-wuc:hover { background-color: #003d7a; }
-        .tab-active { border-bottom: 3px solid #007A78; color: #007A78; }
     </style>
 </head>
 <body class="bg-gray-50">
     <div class="flex h-screen">
         <!-- Sidebar with WUC Logo -->
-        <div class="w-64 bg-wuc text-white shadow-xl">
+        <div class="w-64 bg-wuc text-white shadow-xl flex flex-col">
             <div class="p-6 border-b border-blue-700">
                 <div class="flex items-center space-x-3">
-                    <!-- WUC Logo from official source -->
-                    <img src="https://www.wuc.bw/static/media/LogoWithWhiteBG.e3ef921ca2308cfed7d4.png" 
+                    <img src="https://res.cloudinary.com/devex/image/fetch/ar_1:1,b_transparent,c_pad,f_auto,q_auto,w_160/https://neo-assets.s3.amazonaws.com/assets/0127/8854/Water%2520Utilities%2520Corporation.png" 
                          alt="WUC Logo" 
-                         class="w-24 h-24 rounded-lg bg-white object-contain p-1 justify">
-                 
+                         class="w-24 h-24 rounded-lg bg-white object-contain p-1 align-center">
+               
                 </div>
                 <p class="text-xs mt-2 opacity-75 italic">"We keep it flowing, for you."</p>
             </div>
-            <nav class="mt-6">
+            <nav class="mt-6 flex-1">
                 <a href="#" onclick="showTab('overview')" class="tab-link block px-6 py-3 hover:bg-blue-700 transition" data-tab="overview">
                     📊 Overview
                 </a>
@@ -53,16 +51,20 @@
                     📈 Analytics
                 </a>
             </nav>
-            <div class="absolute bottom-0 w-64 p-4 text-xs text-center opacity-60">
-                <p>© WUC Botswana</p>
-                <p>v2.0 | Customer Service: 0800 600 222</p>
+            <!-- Logout Button -->
+            <div class="p-4 border-t border-blue-700">
+                <button onclick="logout()" class="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg transition flex items-center justify-center space-x-2">
+                    <span>🚪</span>
+                    <span>Logout</span>
+                </button>
+                <p class="text-xs text-center mt-3 opacity-60">© WUC Botswana | v2.0</p>
+                <p class="text-xs text-center opacity-60">Customer Service: 0800 600 222</p>
             </div>
         </div>
 
         <!-- Main Content -->
         <div class="flex-1 overflow-y-auto">
             <div class="p-8">
-                <!-- Header -->
                 <div class="mb-8">
                     <h1 class="text-3xl font-bold text-wuc">Customer Engagement Platform</h1>
                     <p class="text-gray-600 mt-1">Real-time monitoring & management for WUC Botswana</p>
@@ -74,22 +76,18 @@
                         <div class="bg-white rounded-xl shadow-md p-6 border-l-4 border-wuc">
                             <div class="text-3xl font-bold text-wuc" id="total-users">0</div>
                             <div class="text-gray-600 mt-1">Total Customers</div>
-                            <div class="text-xs text-green-600 mt-2">↑ 12% this month</div>
                         </div>
                         <div class="bg-white rounded-xl shadow-md p-6 border-l-4 border-red-500">
                             <div class="text-3xl font-bold text-red-600" id="pending-faults">0</div>
                             <div class="text-gray-600 mt-1">Pending Faults</div>
-                            <div class="text-xs text-orange-600 mt-2">⚠️ Requires attention</div>
                         </div>
                         <div class="bg-white rounded-xl shadow-md p-6 border-l-4 border-green-500">
                             <div class="text-3xl font-bold text-green-600" id="today-messages">0</div>
                             <div class="text-gray-600 mt-1">Today's Messages</div>
-                            <div class="text-xs text-gray-500 mt-2">Last 24 hours</div>
                         </div>
                         <div class="bg-white rounded-xl shadow-md p-6 border-l-4 border-wuc-teal">
                             <div class="text-3xl font-bold text-wuc-teal" id="new-users">0</div>
                             <div class="text-gray-600 mt-1">New Customers (30d)</div>
-                            <div class="text-xs text-green-600 mt-2">↑ Growing</div>
                         </div>
                     </div>
 
@@ -119,18 +117,8 @@
                         <div class="overflow-x-auto">
                             <table class="min-w-full">
                                 <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meter Number</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Area</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Registered</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Active</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="users-table-body" class="divide-y divide-gray-200">
-                                    <tr><td colspan="6" class="text-center py-8 text-gray-500">Loading customers...<\/td></tr>
-                                </tbody>
+                                    <tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meter Number</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Area</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Registered</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Active</th></tr></thead>
+                                <tbody id="users-table-body"><tr><td colspan="6" class="text-center py-8 text-gray-500">Loading customers...</td></tr></tbody>
                             </table>
                         </div>
                     </div>
@@ -139,24 +127,11 @@
                 <!-- Faults Tab -->
                 <div id="faults-tab" class="tab-content hidden">
                     <div class="bg-white rounded-xl shadow-md overflow-hidden">
-                        <div class="px-6 py-4 bg-wuc text-white">
-                            <h3 class="font-semibold">Fault Reports</h3>
-                        </div>
+                        <div class="px-6 py-4 bg-wuc text-white"><h3 class="font-semibold">Fault Reports</h3></div>
                         <div class="overflow-x-auto">
                             <table class="min-w-full">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="faults-table-body" class="divide-y divide-gray-200">
-                                    <tr><td colspan="6" class="text-center py-8 text-gray-500">Loading faults...<\/td></tr>
-                                </tbody>
+                                <thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th></tr></thead>
+                                <tbody id="faults-table-body"><tr><td colspan="6" class="text-center py-8 text-gray-500">Loading faults...</td></tr></tbody>
                             </table>
                         </div>
                     </div>
@@ -167,56 +142,22 @@
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div class="bg-white rounded-xl shadow-md p-6">
                             <h3 class="font-semibold text-gray-800 mb-4">📢 Send Broadcast</h3>
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Target Area</label>
-                                <select id="broadcast-area" class="w-full border rounded-lg px-4 py-2 focus:ring-wuc focus:border-wuc">
-                                    <option value="all">All Areas (National)</option>
-                                    <option value="Gaborone">Gaborone Region</option>
-                                    <option value="Francistown">Francistown Region</option>
-                                    <option value="Lobatse">Lobatse Region</option>
-                                    <option value="Selebi-Phikwe">Selebi-Phikwe</option>
-                                </select>
-                            </div>
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Message</label>
-                                <textarea id="broadcast-message" rows="5" class="w-full border rounded-lg px-4 py-2" placeholder="Type your broadcast message here..."><\/textarea>
-                            </div>
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Schedule (Optional)</label>
-                                <input type="datetime-local" id="broadcast-schedule" class="w-full border rounded-lg px-4 py-2">
-                            </div>
-                            <button onclick="sendBroadcast()" class="bg-wuc text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition w-full">
-                                📢 Send Broadcast
-                            </button>
+                            <div class="mb-4"><label class="block text-sm font-medium text-gray-700 mb-2">Target Area</label><select id="broadcast-area" class="w-full border rounded-lg px-4 py-2"><option value="all">All Areas (National)</option><option value="Gaborone">Gaborone</option><option value="Francistown">Francistown</option><option value="Lobatse">Lobatse</option></select></div>
+                            <div class="mb-4"><label class="block text-sm font-medium text-gray-700 mb-2">Message</label><textarea id="broadcast-message" rows="5" class="w-full border rounded-lg px-4 py-2" placeholder="Type your broadcast message here..."></textarea></div>
+                            <button onclick="sendBroadcast()" class="bg-wuc text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition w-full">📢 Send Broadcast</button>
                         </div>
-                        <div class="bg-white rounded-xl shadow-md p-6">
-                            <h3 class="font-semibold text-gray-800 mb-4">Recent Broadcasts</h3>
-                            <div id="broadcasts-list" class="space-y-3 max-h-96 overflow-y-auto"><\/div>
-                        </div>
+                        <div class="bg-white rounded-xl shadow-md p-6"><h3 class="font-semibold text-gray-800 mb-4">Recent Broadcasts</h3><div id="broadcasts-list" class="space-y-3 max-h-96 overflow-y-auto"></div></div>
                     </div>
                 </div>
 
                 <!-- Readings Tab -->
                 <div id="readings-tab" class="tab-content hidden">
                     <div class="bg-white rounded-xl shadow-md overflow-hidden">
-                        <div class="px-6 py-4 bg-wuc text-white">
-                            <h3 class="font-semibold">Meter Reading Submissions</h3>
-                        </div>
+                        <div class="px-6 py-4 bg-wuc text-white"><h3 class="font-semibold">Meter Reading Submissions</h3></div>
                         <div class="overflow-x-auto">
                             <table class="min-w-full">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meter Number</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reading</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="readings-table-body" class="divide-y divide-gray-200">
-                                    <tr><td colspan="6" class="text-center py-8 text-gray-500">Loading readings...<\/td></tr>
-                                </tbody>
+                                <thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meter</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reading</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th></tr></thead>
+                                <tbody id="readings-table-body"><tr><td colspan="6" class="text-center py-8 text-gray-500">Loading readings...</td></tr></tbody>
                             </table>
                         </div>
                     </div>
@@ -225,14 +166,8 @@
                 <!-- Analytics Tab -->
                 <div id="analytics-tab" class="tab-content hidden">
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div class="bg-white rounded-xl shadow-md p-6">
-                            <h3 class="font-semibold text-gray-800 mb-4">Customer Growth</h3>
-                            <canvas id="userGrowthChart" height="250"><\/canvas>
-                        </div>
-                        <div class="bg-white rounded-xl shadow-md p-6">
-                            <h3 class="font-semibold text-gray-800 mb-4">Feature Usage</h3>
-                            <canvas id="featuresChart" height="250"><\/canvas>
-                        </div>
+                        <div class="bg-white rounded-xl shadow-md p-6"><h3 class="font-semibold text-gray-800 mb-4">Customer Growth</h3><canvas id="userGrowthChart" height="250"></canvas></div>
+                        <div class="bg-white rounded-xl shadow-md p-6"><h3 class="font-semibold text-gray-800 mb-4">Feature Usage</h3><canvas id="featuresChart" height="250"></canvas></div>
                     </div>
                 </div>
             </div>
@@ -262,126 +197,64 @@
             if (tabName === 'broadcast') loadBroadcasts();
         }
 
+        async function logout() {
+            await fetch(`${API_URL}/api/logout`, { method: 'POST' });
+            window.location.href = '/';
+        }
+
         async function loadOverview() {
             await fetchStats();
             const analytics = await fetch(`${API_URL}/api/analytics`).then(r => r.json());
             if (messagesChart) messagesChart.destroy();
             messagesChart = new Chart(document.getElementById('messagesChart'), {
                 type: 'line',
-                data: { labels: analytics.messagesByDay?.map(d => d.day) || [], 
-                        datasets: [{ label: 'Messages', data: analytics.messagesByDay?.map(d => d.count) || [], borderColor: '#0054A4', backgroundColor: 'rgba(0,84,164,0.1)', fill: true }] }
+                data: { labels: analytics.messagesByDay?.map(d => d.day) || [], datasets: [{ label: 'Messages', data: analytics.messagesByDay?.map(d => d.count) || [], borderColor: '#0054A4', fill: true }] }
             });
             if (faultsChart) faultsChart.destroy();
             faultsChart = new Chart(document.getElementById('faultsChart'), {
                 type: 'pie',
-                data: { labels: analytics.faultTypes?.map(f => f.fault_type) || [],
-                        datasets: [{ data: analytics.faultTypes?.map(f => f.count) || [], backgroundColor: ['#0054A4','#007A78','#E63946','#F4A261','#2A9D8F','#E9C46A'] }] }
+                data: { labels: analytics.faultTypes?.map(f => f.fault_type) || [], datasets: [{ data: analytics.faultTypes?.map(f => f.count) || [], backgroundColor: ['#0054A4','#007A78','#E63946','#F4A261','#2A9D8F'] }] }
             });
             const faults = await fetch(`${API_URL}/api/faults`).then(r => r.json());
             if (map) map.remove();
             map = L.map('map').setView([-22.57, 24.0], 6);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-            faults.filter(f => f.latitude).forEach(f => {
-                L.marker([f.latitude, f.longitude]).addTo(map).bindPopup(`<b>${f.fault_type}</b><br>${f.description}<br><small>${f.status}</small>`);
-            });
+            faults.filter(f => f.latitude).forEach(f => { L.marker([f.latitude, f.longitude]).addTo(map).bindPopup(`<b>${f.fault_type}</b><br>${f.description}`); });
         }
 
         async function loadUsers() {
             const users = await fetch(`${API_URL}/api/users`).then(r => r.json());
-            document.getElementById('users-table-body').innerHTML = users.map(u => `
-                <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-3">${u.phone}<\/td>
-                    <td class="px-6 py-3 font-mono">${u.meter_number || '-'}<\/td>
-                    <td class="px-6 py-3">${u.name || '-'}<\/td>
-                    <td class="px-6 py-3">${u.area || '-'}<\/td>
-                    <td class="px-6 py-3 text-sm">${new Date(u.registered_at).toLocaleDateString()}<\/td>
-                    <td class="px-6 py-3 text-sm">${u.last_active ? new Date(u.last_active).toLocaleDateString() : '-'}<\/td>
-                 </tr>
-            `).join('');
+            document.getElementById('users-table-body').innerHTML = users.map(u => `<tr class="hover:bg-gray-50"><td class="px-6 py-3">${u.phone}</td><td class="px-6 py-3">${u.meter_number || '-'}</td><td class="px-6 py-3">${u.name || '-'}</td><td class="px-6 py-3">${u.area || '-'}</td><td class="px-6 py-3">${new Date(u.registered_at).toLocaleDateString()}</td><td class="px-6 py-3">${u.last_active ? new Date(u.last_active).toLocaleDateString() : '-'}</td></tr>`).join('');
         }
 
         async function loadFaults() {
             const faults = await fetch(`${API_URL}/api/faults`).then(r => r.json());
-            document.getElementById('faults-table-body').innerHTML = faults.map(f => `
-                <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-3"><span class="px-2 py-1 rounded text-sm ${f.fault_type === 'Burst Pipe' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}">${f.fault_type || '-'}<\/span><\/td>
-                    <td class="px-6 py-3">${f.user_phone}<\/td>
-                    <td class="px-6 py-3">${f.description?.substring(0, 50) || '-'}<\/td>
-                    <td class="px-6 py-3 text-sm">${f.latitude ? `${f.latitude.toFixed(4)}, ${f.longitude.toFixed(4)}` : '-'}<\/td>
-                    <td class="px-6 py-3"><span class="px-2 py-1 rounded text-xs ${f.status === 'pending' ? 'bg-red-100 text-red-800' : f.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}">${f.status}<\/span><\/td>
-                    <td class="px-6 py-3">
-                        ${f.status === 'pending' ? `<button onclick="markResolved(${f.id})" class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">Resolve<\/button>` : '✅ Resolved'}
-                    <\/td>
-                 </tr>
-            `).join('');
+            document.getElementById('faults-table-body').innerHTML = faults.map(f => `<tr class="hover:bg-gray-50"><td class="px-6 py-3">${f.fault_type || '-'}</td><td class="px-6 py-3">${f.user_phone}</td><td class="px-6 py-3">${f.description?.substring(0, 50) || '-'}</td><td class="px-6 py-3">${f.latitude ? f.latitude.toFixed(4) + ', ' + f.longitude.toFixed(4) : '-'}</td><td class="px-6 py-3"><span class="px-2 py-1 rounded text-xs ${f.status === 'pending' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">${f.status}</span></td><td class="px-6 py-3">${f.status === 'pending' ? `<button onclick="markResolved(${f.id})" class="bg-green-600 text-white px-3 py-1 rounded text-sm">Resolve</button>` : '✅'}</td></tr>`).join('');
         }
 
         async function loadReadings() {
             const readings = await fetch(`${API_URL}/api/readings`).then(r => r.json());
-            document.getElementById('readings-table-body').innerHTML = readings.map(r => `
-                <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-3">${r.user_phone}<\/td>
-                    <td class="px-6 py-3 font-mono">${r.meter_number}<\/td>
-                    <td class="px-6 py-3">${r.reading} m³<\/td>
-                    <td class="px-6 py-3 text-sm">${new Date(r.submitted_at).toLocaleDateString()}<\/td>
-                    <td class="px-6 py-3">${r.approved ? '<span class="text-green-600">✓ Approved<\/span>' : '<span class="text-yellow-600">⏳ Pending<\/span>'}<\/td>
-                    <td class="px-6 py-3">
-                        ${!r.approved ? `<button onclick="approveReading(${r.id})" class="bg-wuc text-white px-3 py-1 rounded text-sm hover:bg-blue-700">Approve<\/button>` : '-'}
-                    <\/td>
-                 </tr>
-            `).join('');
+            document.getElementById('readings-table-body').innerHTML = readings.map(r => `<tr><td class="px-6 py-3">${r.user_phone}</td><td class="px-6 py-3">${r.meter_number}</td><td class="px-6 py-3">${r.reading} m³</td><td class="px-6 py-3">${new Date(r.submitted_at).toLocaleDateString()}</td><td class="px-6 py-3">${r.approved ? '✓ Approved' : '⏳ Pending'}</td><td class="px-6 py-3">${!r.approved ? `<button onclick="approveReading(${r.id})" class="bg-wuc text-white px-3 py-1 rounded text-sm">Approve</button>` : '-'}</td></tr>`).join('');
         }
 
         async function loadBroadcasts() {
             const broadcasts = await fetch(`${API_URL}/api/broadcasts`).then(r => r.json());
-            document.getElementById('broadcasts-list').innerHTML = broadcasts.map(b => `
-                <div class="border rounded-lg p-3">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <p class="font-semibold text-sm">${new Date(b.scheduled_for).toLocaleString()}</p>
-                            <p class="text-gray-700 text-sm mt-1">${b.message}</p>
-                        </div>
-                        <span class="text-xs px-2 py-1 rounded ${b.status === 'sent' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">${b.status}<\/span>
-                    </div>
-                    <p class="text-xs text-gray-500 mt-2">Target: ${b.target_area || 'All'} | Recipients: ${b.recipient_count || 0}</p>
-                </div>
-            `).join('');
+            document.getElementById('broadcasts-list').innerHTML = broadcasts.map(b => `<div class="border rounded-lg p-3"><div class="flex justify-between"><div><p class="font-semibold text-sm">${new Date(b.scheduled_for).toLocaleString()}</p><p class="text-gray-700 text-sm">${b.message}</p></div><span class="text-xs px-2 py-1 rounded bg-yellow-100">${b.status}</span></div><p class="text-xs text-gray-500 mt-2">Target: ${b.target_area || 'All'} | Recipients: ${b.recipient_count || 0}</p></div>`).join('');
         }
 
         async function sendBroadcast() {
             const message = document.getElementById('broadcast-message').value;
             const targetArea = document.getElementById('broadcast-area').value;
-            const scheduledFor = document.getElementById('broadcast-schedule').value;
             if (!message) { alert('Please enter a message'); return; }
-            const res = await fetch(`${API_URL}/api/broadcast`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message, targetArea, scheduledFor: scheduledFor || undefined })
-            });
+            const res = await fetch(`${API_URL}/api/broadcast`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message, targetArea }) });
             const data = await res.json();
-            if (data.success) {
-                alert(`Broadcast sent to ${data.recipients} customers!`);
-                document.getElementById('broadcast-message').value = '';
-                loadBroadcasts();
-            } else alert('Error sending broadcast');
+            if (data.success) { alert(`Broadcast sent to ${data.recipients} customers!`); document.getElementById('broadcast-message').value = ''; loadBroadcasts(); }
+            else alert('Error sending broadcast');
         }
 
-        async function markResolved(id) {
-            await fetch(`${API_URL}/api/faults/${id}/status`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: 'resolved', technician: 'WUC Admin' })
-            });
-            loadFaults();
-            fetchStats();
-        }
+        async function markResolved(id) { await fetch(`${API_URL}/api/faults/${id}/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'resolved', technician: 'WUC Admin' }) }); loadFaults(); fetchStats(); }
+        async function approveReading(id) { await fetch(`${API_URL}/api/readings/${id}/approve`, { method: 'POST' }); loadReadings(); }
 
-        async function approveReading(id) {
-            await fetch(`${API_URL}/api/readings/${id}/approve`, { method: 'POST' });
-            loadReadings();
-        }
-
-        // Initialize
         showTab('overview');
         setInterval(() => { if (document.getElementById('overview-tab') && !document.getElementById('overview-tab').classList.contains('hidden')) loadOverview(); }, 30000);
     </script>
