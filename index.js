@@ -47,77 +47,8 @@ db.serialize(() => {
 });
 
 // ========================================
-// DASHBOARD API
+// WHATSAPP BOT FUNCTIONS
 // ========================================
-const dashboard = express();
-dashboard.use(cors());
-dashboard.use(express.json());
-dashboard.use(express.static('public'));
-
-dashboard.get('/api/stats', (req, res) => {
-    db.get(`SELECT COUNT(*) as users FROM users`, (err, users) => {
-        db.get(`SELECT COUNT(*) as faults FROM faults WHERE status='pending'`, (err, faults) => {
-            res.json({ totalUsers: users?.users || 0, pendingFaults: faults?.faults || 0 });
-        });
-    });
-});
-
-dashboard.get('/api/users', (req, res) => {
-    db.all(`SELECT * FROM users ORDER BY registered_at DESC`, (err, rows) => {
-        res.json(rows || []);
-    });
-});
-
-dashboard.get('/api/faults', (req, res) => {
-    db.all(`SELECT * FROM faults ORDER BY reported_at DESC`, (err, rows) => {
-        res.json(rows || []);
-    });
-});
-
-dashboard.post('/api/faults/:id/status', (req, res) => {
-    db.run(`UPDATE faults SET status='resolved' WHERE id=?`, [req.params.id], () => {
-        res.json({ success: true });
-    });
-});
-
-dashboard.post('/api/broadcast', (req, res) => {
-    res.json({ success: true, recipients: 0 });
-});
-
-dashboard.get('/api/broadcasts', (req, res) => {
-    res.json([]);
-});
-
-dashboard.get('/api/readings', (req, res) => {
-    res.json([]);
-});
-
-dashboard.post('/api/readings/:id/approve', (req, res) => {
-    res.json({ success: true });
-});
-
-dashboard.get('/api/analytics', (req, res) => {
-    res.json({ messagesByDay: [], faultTypes: [] });
-});
-
-dashboard.post('/api/logout', (req, res) => {
-    res.json({ success: true });
-});
-
-dashboard.get('/dashboard', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
-});
-
-dashboard.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// ========================================
-// WHATSAPP BOT
-// ========================================
-const bot = express();
-bot.use(express.json());
-
 const sessions = {};
 const accounts = {
     'GBE-00412': { name: 'Kefilwe Moyo', balance: 247.50, area: 'Gaborone' },
@@ -150,16 +81,12 @@ async function sendWhatsApp(to, text) {
 async function handleIncoming(from, text) {
     console.log(`📱 ${from}: "${text}"`);
     
-    // Store message
     db.run(`INSERT INTO messages_log (user_phone, message) VALUES (?, ?)`, [from, text]);
-    
-    // Update user
     db.run(`INSERT INTO users (phone, last_active) VALUES (?, CURRENT_TIMESTAMP) 
             ON CONFLICT(phone) DO UPDATE SET last_active=CURRENT_TIMESTAMP`, [from]);
     
     const lower = text.toLowerCase().trim();
     
-    // Menu
     if (lower === 'hi' || lower === 'menu' || lower === 'start') {
         await sendWhatsApp(from, `💧 *WATER UTILITIES CORPORATION - BOTSWANA* 💧
 
@@ -183,7 +110,6 @@ Type your meter number (e.g., GBE-00412) to link your account.
         return;
     }
     
-    // Check Balance
     if (lower === '1' || lower === 'balance' || lower === 'check balance') {
         await sendWhatsApp(from, `💰 *CURRENT BALANCE*
 
@@ -192,7 +118,6 @@ Example: GBE-00412`);
         return;
     }
     
-    // Meter number handling
     const meterMatch = text.toUpperCase().match(/[A-Z]{3}-\d{5}/);
     if (meterMatch) {
         const meter = meterMatch[0];
@@ -213,34 +138,58 @@ Try: GBE-00412, GBE-00891, FTB-00234`);
         return;
     }
     
-    // Default response
     await sendWhatsApp(from, `Type "MENU" to see available options.
 
 Need help? Call 0800 600 222`);
 }
 
-// Webhook endpoints
-bot.get('/webhook', (req, res) => {
-    console.log('Webhook verification');
+// ========================================
+// EXPRESS APP - Combined
+// ========================================
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use(express.static('public'));
+
+// ========================================
+// WHATSAPP WEBHOOK ROUTES (MUST BE FIRST)
+// ========================================
+app.get('/webhook', (req, res) => {
+    console.log('🔗 Webhook GET received');
+    console.log('Query params:', req.query);
+    
+    const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
     
-    if (token === process.env.VERIFY_TOKEN) {
-        console.log('✅ Webhook verified');
+    if (mode === 'subscribe' && token === process.env.VERIFY_TOKEN) {
+        console.log('✅ Webhook verified successfully!');
         res.status(200).send(challenge);
     } else {
-        console.log('❌ Verification failed');
+        console.log('❌ Verification failed. Expected:', process.env.VERIFY_TOKEN, 'Got:', token);
         res.sendStatus(403);
     }
 });
 
-bot.post('/webhook', async (req, res) => {
+app.post('/webhook', async (req, res) => {
+    console.log('📨 Webhook POST received');
     try {
         const body = req.body;
+        console.log('Body:', JSON.stringify(body, null, 2));
+        
         if (body.object === 'whatsapp_business_account') {
-            const msg = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-            if (msg && msg.type === 'text') {
-                await handleIncoming(msg.from, msg.text.body);
+            const entry = body.entry[0];
+            const changes = entry.changes[0];
+            const value = changes.value;
+            
+            if (value.messages && value.messages[0]) {
+                const msg = value.messages[0];
+                const from = msg.from;
+                const type = msg.type;
+                
+                if (type === 'text') {
+                    await handleIncoming(from, msg.text.body);
+                }
             }
         }
         res.sendStatus(200);
@@ -250,24 +199,78 @@ bot.post('/webhook', async (req, res) => {
     }
 });
 
-bot.get('/', (req, res) => {
-    res.json({ status: 'running', service: 'WUC Botswana Bot' });
+// ========================================
+// DASHBOARD API ROUTES
+// ========================================
+app.get('/api/stats', (req, res) => {
+    db.get(`SELECT COUNT(*) as users FROM users`, (err, users) => {
+        db.get(`SELECT COUNT(*) as faults FROM faults WHERE status='pending'`, (err, faults) => {
+            res.json({ totalUsers: users?.users || 0, pendingFaults: faults?.faults || 0 });
+        });
+    });
+});
+
+app.get('/api/users', (req, res) => {
+    db.all(`SELECT * FROM users ORDER BY registered_at DESC`, (err, rows) => {
+        res.json(rows || []);
+    });
+});
+
+app.get('/api/faults', (req, res) => {
+    db.all(`SELECT * FROM faults ORDER BY reported_at DESC`, (err, rows) => {
+        res.json(rows || []);
+    });
+});
+
+app.post('/api/faults/:id/status', (req, res) => {
+    db.run(`UPDATE faults SET status='resolved' WHERE id=?`, [req.params.id], () => {
+        res.json({ success: true });
+    });
+});
+
+app.post('/api/broadcast', (req, res) => {
+    res.json({ success: true, recipients: 0 });
+});
+
+app.get('/api/broadcasts', (req, res) => {
+    res.json([]);
+});
+
+app.get('/api/readings', (req, res) => {
+    res.json([]);
+});
+
+app.post('/api/readings/:id/approve', (req, res) => {
+    res.json({ success: true });
+});
+
+app.get('/api/analytics', (req, res) => {
+    res.json({ messagesByDay: [], faultTypes: [] });
+});
+
+app.post('/api/logout', (req, res) => {
+    res.json({ success: true });
 });
 
 // ========================================
-// START SERVERS
+// PAGE ROUTES
 // ========================================
-const PORT_BOT = 3000;
-const PORT_DASH = 3001;
-
-bot.listen(PORT_BOT, () => {
-    console.log(`🤖 WhatsApp Bot running on port ${PORT_BOT}`);
-    console.log(`📱 Webhook URL: https://your-railway-url.up.railway.app/webhook`);
+app.get('/dashboard', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
-dashboard.listen(PORT_DASH, () => {
-    console.log(`📊 Dashboard running on port ${PORT_DASH}`);
-    console.log(`🔗 Dashboard URL: https://your-railway-url.up.railway.app/dashboard`);
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-console.log('\n✅ All services started!');
+// ========================================
+// START SERVER
+// ========================================
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`\n✅ Server running on port ${PORT}`);
+    console.log(`📱 Webhook URL: https://water-botswana-production.up.railway.app/webhook`);
+    console.log(`📊 Dashboard: https://water-botswana-production.up.railway.app/dashboard`);
+    console.log(`🔗 Login: https://water-botswana-production.up.railway.app/`);
+    console.log(`\n💡 Test webhook in browser: https://water-botswana-production.up.railway.app/webhook?hub.mode=subscribe&hub.verify_token=${process.env.VERIFY_TOKEN}&hub.challenge=123456`);
+});
