@@ -5,7 +5,7 @@ const path = require('path');
 const cors = require('cors');
 require('dotenv').config();
 
-console.log('🚀 Starting WUC Botswana Bot...');
+console.log('🚀 Starting WUC Botswana Bot v3.0...');
 console.log('Environment check:');
 console.log('  VERIFY_TOKEN:', process.env.VERIFY_TOKEN ? '✅ Set' : '❌ Missing');
 console.log('  WHATSAPP_TOKEN:', process.env.WHATSAPP_TOKEN ? '✅ Set' : '❌ Missing');
@@ -23,6 +23,7 @@ db.serialize(() => {
         meter_number TEXT,
         name TEXT,
         area TEXT,
+        alert_subscribed BOOLEAN DEFAULT 0,
         registered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         last_active DATETIME
     )`);
@@ -54,6 +55,13 @@ db.serialize(() => {
         direction TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
+    
+    db.run(`CREATE TABLE IF NOT EXISTS new_connections (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_phone TEXT,
+        status TEXT DEFAULT 'pending',
+        submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
 });
 
 // ========================================
@@ -65,6 +73,30 @@ const accounts = {
     'FTB-00234': { name: 'Mpho Nkwe', balance: 512.00, area: 'Francistown', address: 'Francistown, Monarch' },
     'LBE-00123': { name: 'Botswana Water Corp', balance: 189.50, area: 'Lobatse', address: 'Lobatse Industrial' },
     'GBE-00999': { name: 'Demo Customer', balance: 75.25, area: 'Gaborone', address: 'Gaborone CBD' }
+};
+
+// Water supply status by area
+const waterStatus = {
+    'Gaborone': { status: '🟢 Normal', maintenance: 'None scheduled', color: 'green' },
+    'Gaborone West': { status: '🟡 Maintenance', maintenance: 'May 15, 9am-3pm', color: 'yellow' },
+    'Gaborone North': { status: '🟢 Normal', maintenance: 'None scheduled', color: 'green' },
+    'Francistown': { status: '🟡 Maintenance', maintenance: 'May 16, 8am-12pm', color: 'yellow' },
+    'Francistown Industrial': { status: '🟡 Maintenance', maintenance: 'May 16, 8am-12pm', color: 'yellow' },
+    'Lobatse': { status: '🟢 Normal', maintenance: 'None scheduled', color: 'green' },
+    'Lobatse CBD': { status: '🟡 Maintenance', maintenance: 'May 18, 10am-2pm', color: 'yellow' },
+    'Selebi-Phikwe': { status: '🔴 Interruption', maintenance: 'Burst pipe - fixing', color: 'red' },
+    'Molepolole': { status: '🟢 Normal', maintenance: 'None scheduled', color: 'green' },
+    'Mahalapye': { status: '🟢 Normal', maintenance: 'None scheduled', color: 'green' },
+    'Serowe': { status: '🟡 Low pressure', maintenance: 'Pump station issue', color: 'yellow' }
+};
+
+// Office locations
+const offices = {
+    'Gaborone': '🏢 WUC Headquarters, Gaborone International Commerce Park\n🕐 Mon-Fri 8am-5pm\n📞 0800 600 222',
+    'Francistown': '🏢 Francistown Regional Office, Blue Jacket Street\n🕐 Mon-Fri 8am-5pm\n📞 241 1234',
+    'Lobatse': '🏢 Lobatse Service Centre, Main Mall\n🕐 Mon-Fri 8am-4:30pm\n📞 533 4567',
+    'Selebi-Phikwe': '🏢 Selebi-Phikwe Office, Industrial Area\n🕐 Mon-Fri 8am-5pm\n📞 261 2345',
+    'Molepolole': '🏢 Molepolole Satellite Office, Kgosi Square\n🕐 Mon & Wed 9am-3pm\n📞 592 3456'
 };
 
 // Session management
@@ -96,37 +128,41 @@ async function sendWhatsApp(to, text) {
 }
 
 // ========================================
-// SEND INTERACTIVE MENU
+// MAIN MENU (UPDATED WITH NEW FEATURES)
 // ========================================
 async function sendMenu(to) {
     await sendWhatsApp(to, `💧 *WATER UTILITIES CORPORATION - BOTSWANA* 💧
 
 *"We keep it flowing, for you."*
 
-🇧🇼 Welcome to WUC WhatsApp Service!
+🇧🇼 *Main Menu*
 
-*What would you like to do?*
+1️⃣ 💰 Check Balance
+2️⃣ 💳 Pay Bill
+3️⃣ 📸 Submit Meter Reading
+4️⃣ 🚨 Report Fault
+5️⃣ 📜 Payment History
+6️⃣ 🚰 Water Supply Status
+7️⃣ 🔌 New Connection
+8️⃣ 💹 Tariff Calculator
+9️⃣ 📍 Find WUC Office
+🔟 💡 Water Saving Tips
 
-1️⃣ *Check Balance* - View your water bill
-2️⃣ *Pay Bill* - Make a payment
-3️⃣ *Submit Meter Reading* - Send your reading
-4️⃣ *Report Fault* - Burst pipe, leak, etc.
-5️⃣ *Payment History* - View past payments
+*Quick Commands:*
+• *STATUS* - Water supply in your area
+• *TARIFF* - Current water rates
+• *OFFICE* - Nearest WUC branch
+• *QUALITY* - Water quality report
+• *ALERTS* - Subscribe to notifications
 
-*Reply with the number or command.*
+*New Connection?* Type *CONNECT*
+*Emergency?* Call 0800 600 222
 
-📝 *Quick Actions:*
-• Type your meter number (e.g., GBE-00412) to link account
-• Type "MENU" anytime to see this menu
-• Type "HELP" for support
-
-📞 *Emergency Hotline:* 0800 600 222
-
-*Serving Botswana with Excellence since 1970*`);
+*Serving Botswana with Excellence 🇧🇼*`);
 }
 
 // ========================================
-// SEND HELP MENU
+// HELP MENU
 // ========================================
 async function sendHelp(to) {
     await sendWhatsApp(to, `🆘 *WUC HELP MENU* 🆘
@@ -139,25 +175,391 @@ async function sendHelp(to) {
 📸 *READING* - Submit meter reading
 🚨 *FAULT* - Report a problem
 📜 *HISTORY* - View payment history
+🚰 *STATUS* - Water supply status
+🔌 *CONNECT* - New connection info
+💹 *TARIFF* - Water rates calculator
+📍 *OFFICE* - Find WUC office
+💡 *TIPS* - Water saving tips
+🔔 *ALERTS* - Subscribe to notifications
 
 *Meter Number Format:*
 [Area Code]-[5 digits]
 Example: GBE-00412
-
-*Fault Types:*
-• Burst pipe
-• No water flow
-• Low pressure
-• Leakage
-• Dirty water
-• Meter issue
 
 *Contact Us:*
 📞 0800 600 222
 📧 support@wuc.bw
 🌐 www.wuc.bw
 
-Type "MENU" to return to main menu.`);
+Type *MENU* to return to main menu.`);
+}
+
+// ========================================
+// FEATURE 1: WATER SUPPLY STATUS
+// ========================================
+async function waterSupplyStatus(to, area) {
+    const userArea = area || 'Gaborone';
+    const status = waterStatus[userArea] || waterStatus['Gaborone'];
+    
+    let alertStatus = '';
+    db.get(`SELECT alert_subscribed FROM users WHERE phone = ?`, [to], (err, row) => {
+        if (row && row.alert_subscribed) {
+            alertStatus = '\n\n🔔 *You are subscribed to alerts*\nType *ALERTS OFF* to unsubscribe';
+        } else {
+            alertStatus = '\n\n🔔 Type *ALERTS* to get notified about interruptions in your area';
+        }
+        
+        sendWhatsApp(to, `🚰 *WATER SUPPLY STATUS* 🚰
+
+📍 *${userArea}:* ${status.status}
+
+${status.maintenance !== 'None scheduled' ? `🛠️ *Maintenance:* ${status.maintenance}` : '✅ *No planned maintenance*'}
+
+*Other Areas:*
+• Gaborone West: 🟡 Maintenance (May 15)
+• Selebi-Phikwe: 🔴 Interruption (Burst pipe)
+• Serowe: 🟡 Low pressure
+
+*Emergency Interruptions:*
+🔧 Selebi-Phikwe - Crew dispatched
+🕐 Estimated restoration: 6pm
+
+*Report supply issues:* Type FAULT or call 0800 600 222
+${alertStatus}`);
+    });
+}
+
+async function subscribeAlerts(to, action) {
+    if (action === 'on') {
+        db.run(`UPDATE users SET alert_subscribed = 1 WHERE phone = ?`, [to]);
+        await sendWhatsApp(to, `🔔 *ALERTS SUBSCRIBED* 🔔
+
+You will now receive notifications about:
+• Water supply interruptions
+• Planned maintenance
+• Emergency shutdowns
+• Service restoration updates
+
+Type *ALERTS OFF* to unsubscribe.`);
+    } else if (action === 'off') {
+        db.run(`UPDATE users SET alert_subscribed = 0 WHERE phone = ?`, [to]);
+        await sendWhatsApp(to, `🔕 *ALERTS UNSUBSCRIBED* 🔕
+
+You will no longer receive interruption notifications.
+
+Type *ALERTS ON* to resubscribe.`);
+    }
+}
+
+// ========================================
+// FEATURE 2: NEW CONNECTION
+// ========================================
+async function newConnection(to, action) {
+    if (action === 'apply') {
+        db.run(`INSERT INTO new_connections (user_phone, status) VALUES (?, 'pending')`, [to]);
+        await sendWhatsApp(to, `🔌 *NEW CONNECTION APPLICATION* 🔌
+
+*Application Started!*
+Reference: WUC-${Date.now().toString().slice(-8)}
+
+*Requirements:*
+📋 Completed application form
+🆚 Copy of Omang (National ID)
+🏠 Proof of property ownership/lease
+📍 Plot/ERF number
+📐 Site plan (for new developments)
+
+💰 *Fees:*
+• Connection fee: P850
+• Deposit: P500 (residential)
+• Deposit: P2000 (commercial)
+• Meter cost: P350
+
+*Next Steps:*
+1️⃣ Visit any WUC office with documents
+2️⃣ Pay connection fee
+3️⃣ Schedule inspection (3-5 days)
+4️⃣ Installation (7-10 days)
+
+*Apply Online:* www.wuc.bw/connections
+*Status Check:* Type *CONNECTION STATUS*
+
+📞 Need help? Call New Connections: 0800 600 111`);
+    } else {
+        await sendWhatsApp(to, `🔌 *NEW WATER CONNECTION* 🔌
+
+*Service Types:*
+🏠 Residential - P850 + P500 deposit
+🏢 Commercial - P850 + P2000 deposit
+🏭 Industrial - P1500 + P5000 deposit
+🚜 Agricultural - P1200 + P1000 deposit
+
+*Processing time:* 10-15 working days
+
+*How to apply:*
+1️⃣ Type *APPLY* to start application
+2️⃣ Visit any WUC office
+3️⃣ Apply online: www.wuc.bw/connections
+
+*Required Documents:*
+✓ Completed application form
+✓ Copy of Omang
+✓ Proof of ownership/lease
+✓ Site plan (if applicable)
+
+📞 Call 0800 600 111 for assistance`);
+    }
+}
+
+// ========================================
+// FEATURE 3: TARIFF CALCULATOR
+// ========================================
+async function tariffCalculator(to, usage) {
+    const usageNum = parseFloat(usage);
+    
+    if (isNaN(usageNum) || !usage) {
+        await sendWhatsApp(to, `💰 *WATER TARIFF CALCULATOR* 💰
+
+*Domestic Tariffs (per month):*
+0-10 m³: P5.50/m³
+11-20 m³: P8.20/m³
+21-40 m³: P12.00/m³
+41+ m³: P18.50/m³
+
+*Calculate your bill:*
+Type *CALCULATE* followed by your usage
+Example: CALCULATE 25
+
+*Sample calculation for 25m³:*
+First 10m³: 10 × P5.50 = P55.00
+Next 10m³: 10 × P8.20 = P82.00
+Last 5m³: 5 × P12.00 = P60.00
+Total: P197.00 + VAT
+
+*Commercial:* P15.00/m³ (all usage)
+*Industrial:* P12.50/m³ (bulk rates available)
+
+*Pensioners:* First 5m³ free
+*Lifeline:* First 3m³ free for low-income
+
+💡 Type *COMPARE* to see different usage scenarios`);
+        return;
+    }
+    
+    let cost = 0;
+    let breakdown = '';
+    
+    if (usageNum <= 10) {
+        cost = usageNum * 5.50;
+        breakdown = `${usageNum}m³ @ P5.50 = P${cost.toFixed(2)}`;
+    } else if (usageNum <= 20) {
+        cost = (10 * 5.50) + ((usageNum - 10) * 8.20);
+        breakdown = `First 10m³ @ P5.50 = P55.00\nNext ${usageNum - 10}m³ @ P8.20 = P${((usageNum - 10) * 8.20).toFixed(2)}`;
+    } else if (usageNum <= 40) {
+        cost = (10 * 5.50) + (10 * 8.20) + ((usageNum - 20) * 12.00);
+        breakdown = `First 10m³ @ P5.50 = P55.00\nNext 10m³ @ P8.20 = P82.00\nRemaining ${usageNum - 20}m³ @ P12.00 = P${((usageNum - 20) * 12).toFixed(2)}`;
+    } else {
+        cost = (10 * 5.50) + (10 * 8.20) + (20 * 12.00) + ((usageNum - 40) * 18.50);
+        breakdown = `First 10m³ @ P5.50 = P55.00\nNext 10m³ @ P8.20 = P82.00\nNext 20m³ @ P12.00 = P240.00\nRemaining ${usageNum - 40}m³ @ P18.50 = P${((usageNum - 40) * 18.50).toFixed(2)}`;
+    }
+    
+    const vat = cost * 0.12;
+    const total = cost + vat;
+    
+    await sendWhatsApp(to, `💰 *TARIFF CALCULATION* 💰
+
+Usage: ${usageNum} m³
+
+*Breakdown:*
+${breakdown}
+
+─────────────────
+*Subtotal:* P${cost.toFixed(2)}
+*VAT (12%):* P${vat.toFixed(2)}
+*TOTAL DUE:* P${total.toFixed(2)}
+
+*Compare:*
+• 15m³: P${((10*5.50)+(5*8.20)).toFixed(2)} + VAT
+• 30m³: P${((10*5.50)+(10*8.20)+(10*12)).toFixed(2)} + VAT
+• 50m³: P${((10*5.50)+(10*8.20)+(20*12)+(10*18.50)).toFixed(2)} + VAT
+
+💡 Type *PAY* to make a payment
+📊 Type *CALCULATE* + number for another calculation`);
+}
+
+// ========================================
+// FEATURE 4: FIND WUC OFFICE
+// ========================================
+async function findOffice(to, location) {
+    if (location && offices[location]) {
+        const office = offices[location];
+        await sendWhatsApp(to, `📍 *WUC OFFICE LOCATOR* 📍
+
+${office}
+
+*Services available:*
+✓ Bill payments
+✓ New connections
+✓ Fault reporting
+✓ Account inquiries
+✓ Meter readings
+✓ Application submissions
+
+*Send your location* to find the nearest office:
+Tap 📎 → Location → Send Current Location
+
+🗺️ *Full list:* www.wuc.bw/offices
+
+📞 Customer Care: 0800 600 222 (24/7)`);
+    } else {
+        await sendWhatsApp(to, `📍 *WUC OFFICE LOCATOR* 📍
+
+*Major Offices:*
+
+🏢 *Gaborone (Headquarters)*
+Gaborone International Commerce Park
+🕐 Mon-Fri 8am-5pm
+
+🏢 *Francistown*
+Blue Jacket Street
+🕐 Mon-Fri 8am-5pm
+
+🏢 *Lobatse*
+Main Mall
+🕐 Mon-Fri 8am-4:30pm
+
+🏢 *Selebi-Phikwe*
+Industrial Area
+🕐 Mon-Fri 8am-5pm
+
+🏢 *Molepolole*
+Kgosi Square
+🕐 Mon & Wed 9am-3pm
+
+*To get specific office details:*
+Type *OFFICE* followed by city name
+Example: OFFICE Francistown
+
+*Send your location* for nearest office:
+Tap 📎 → Location → Send Current Location
+
+🗺️ www.wuc.bw/offices`);
+    }
+}
+
+// ========================================
+// FEATURE 5: WATER SAVING TIPS
+// ========================================
+async function waterSavingTips(to, category) {
+    if (category === 'home') {
+        await sendWhatsApp(to, `💡 *WATER SAVING TIPS - HOME* 💡
+
+*Bathroom:*
+✓ Take 5-minute showers (saves 20L/day)
+✓ Turn off tap while brushing (saves 6L/min)
+✓ Fix leaking toilets (saves 200L/day)
+✓ Install water-efficient showerheads
+
+*Kitchen:*
+✓ Use dishwasher only when full
+✓ Keep drinking water in fridge (no running tap)
+✓ Wash vegetables in a bowl
+✓ Compost food waste instead of using disposal
+
+*Laundry:*
+✓ Run full loads only
+✓ Use water-efficient washing machine
+✓ Reuse grey water for garden
+
+*Potential savings:* 50L/day = ~P90/month
+
+💡 Type *TIPS GARDEN* for outdoor tips
+💡 Type *TIPS LEAKS* for leak detection
+💡 Type *AUDIT* to schedule free water audit`);
+    } else if (category === 'garden') {
+        await sendWhatsApp(to, `💡 *WATER SAVING TIPS - GARDEN* 💡
+
+*Watering:*
+✓ Water early morning or late evening
+✓ Use a watering can instead of hose
+✓ Install drip irrigation
+✓ Add mulch to reduce evaporation
+
+*Plant Choice:*
+✓ Use indigenous/drought-tolerant plants
+✓ Group plants by water needs
+✓ Reduce lawn area
+✓ Use shade cloth for vegetables
+
+*Rainwater Harvesting:*
+✓ Install rain barrels
+✓ Redirect downspouts to garden
+✓ Use permeable paving
+
+*Pool:*
+✓ Use pool cover to reduce evaporation
+✓ Check for leaks regularly
+
+*Potential savings:* 100L/day = ~P180/month
+
+💡 Type *TIPS HOME* for indoor tips
+💡 Type *TIPS LEAKS* for leak detection
+💡 Type *AUDIT* for free assessment`);
+    } else if (category === 'leaks') {
+        await sendWhatsApp(to, `💡 *LEAK DETECTION & FIXES* 💡
+
+*How to detect leaks:*
+✓ Check meter before/after 2 hours no use
+✓ Listen for running water sounds
+✓ Check for wet spots on walls/floor
+✓ Use food coloring in toilet tank
+
+*Common leak costs:*
+• Dripping tap: P50-100/month
+• Running toilet: P200-400/month
+• Hidden pipe leak: P500+/month
+
+*Quick fixes:*
+✓ Replace tap washers (P5-10)
+✓ Tighten connections
+✓ Call plumber for major leaks
+
+*Report leaks to WUC:*
+Type *FAULT* or call 0800 600 222
+
+*Free water audit:* Type *AUDIT* to schedule
+
+💡 Fixing leaks saves water AND money!`);
+    } else {
+        await sendWhatsApp(to, `💡 *WATER SAVING TIPS* 💡
+🇧🇼 *For Botswana's water security*
+
+*Quick Wins:*
+✓ Fix leaking taps (saves 15L/day)
+✓ Take shorter showers (5 min max)
+✓ Turn off tap while brushing (saves 6L/min)
+✓ Use a bucket instead of hose for car washing
+
+*Monthly Savings Potential:*
+🏠 Home: Save 50L/day = ~P90/month
+🌿 Garden: Save 100L/day = ~P180/month
+🔧 Fix leaks: Save 200L/day = ~P360/month
+
+*Free Resources:*
+• Water-saving kit (request at office)
+• DIY leak detection guide
+• Indigenous plant list
+
+*Get detailed tips:*
+• Type *TIPS HOME* - Indoor savings
+• Type *TIPS GARDEN* - Outdoor savings
+• Type *TIPS LEAKS* - Leak detection
+• Type *AUDIT* - Free water audit
+
+*Every drop counts! 🇧🇼*
+
+Report leaks: Type *FAULT* or call 0800 600 222`);
+    }
 }
 
 // ========================================
@@ -185,7 +587,7 @@ async function checkBalance(to, meterNumber) {
     } else {
         await sendWhatsApp(to, `❌ *METER NOT FOUND* ❌
 
-Meter number "${meterNumber}" does not exist in our system.
+Meter number "${meterNumber}" does not exist.
 
 📋 *Valid test meters:*
 • GBE-00412 (Gaborone)
@@ -193,7 +595,7 @@ Meter number "${meterNumber}" does not exist in our system.
 • FTB-00234 (Francistown)
 • LBE-00123 (Lobatse)
 
-Type *MENU* to try again or call 0800 600 222 for assistance.`);
+Type *MENU* to try again or call 0800 600 222.`);
     }
 }
 
@@ -219,16 +621,13 @@ Or type *CANCEL* to abort.`);
         await sendWhatsApp(to, `✅ *NO OUTSTANDING BALANCE* ✅
 
 Your account is fully paid up.
-Thank you for being a responsible customer!
 
 Type *MENU* for other options.`);
     } else {
         await sendWhatsApp(to, `🔑 *METER REQUIRED* 🔑
 
 Please enter your meter number first.
-Example: GBE-00412
-
-Type *MENU* to cancel.`);
+Example: GBE-00412`);
         sessions[to] = { step: 'awaiting_meter' };
     }
 }
@@ -272,6 +671,9 @@ Amount: P${numAmount.toFixed(2)}
 3️⃣ *In Person*
    Any WUC customer service office
 
+4️⃣ *MyZaka*
+   Download app or visit myzaka.com
+
 ⚠️ After completing payment, type *PAID*
 ❌ Type *CANCEL* to abort
 
@@ -288,7 +690,6 @@ Amount: P${amount?.toFixed(2) || '0'}
 Meter: ${meter}
 Reference: PAY-${Date.now().toString().slice(-8)}
 Date: ${new Date().toLocaleDateString()}
-Time: ${new Date().toLocaleTimeString()}
 
 *A receipt has been sent to your registered email.*
 
@@ -297,7 +698,6 @@ Thank you for your payment!
 
 Type *MENU* for other options.`);
     
-    // Update balance (in real system, this would update database)
     if (meter && accounts[meter]) {
         accounts[meter].balance = Math.max(0, accounts[meter].balance - amount);
     }
@@ -348,7 +748,6 @@ Or send a PHOTO of your meter.`);
         return;
     }
     
-    // Store in database
     db.run(`INSERT INTO meter_readings (user_phone, meter_number, reading) VALUES (?, ?, ?)`,
         [to, meter, numReading]);
     
@@ -360,9 +759,9 @@ Date: ${new Date().toLocaleDateString()}
 Reference: MET-${Date.now().toString().slice(-8)}
 
 *What happens next?*
-• Our team will verify your reading within 24 hours
-• Your bill will be updated accordingly
-• You'll receive a confirmation message
+• Our team will verify within 24 hours
+• Your bill will be updated
+• You'll receive confirmation
 
 Thank you for your submission!
 
@@ -420,10 +819,10 @@ Type *CANCEL* to abort.`);
 
 Selected: ${faultName}
 
-Please describe the problem in detail:
+Please describe the problem:
 • When did it start?
 • How severe is it?
-• Any other relevant information
+• Any other details
 
 Type *CANCEL* to abort.`);
 }
@@ -431,27 +830,25 @@ Type *CANCEL* to abort.`);
 async function processFaultDescription(to, description) {
     const faultType = sessions[to]?.fault_type;
     
-    // Store in database
     db.run(`INSERT INTO faults (user_phone, fault_type, description, status) 
             VALUES (?, ?, ?, 'pending')`,
         [to, faultType, description]);
     
     await sendWhatsApp(to, `✅ *FAULT REPORTED SUCCESSFULLY* ✅
 
-📋 Fault Type: ${faultType}
+📋 Fault: ${faultType}
 📝 Description: ${description.substring(0, 100)}${description.length > 100 ? '...' : ''}
 🆔 Reference: WUC-${Date.now().toString().slice(-8)}
 📅 Date: ${new Date().toLocaleDateString()}
-⏰ Time: ${new Date().toLocaleTimeString()}
 
 *What happens next?*
 • Our team has been notified
-• A technician will be dispatched within 24 hours
-• You'll receive updates via WhatsApp
+• Technician dispatched within 24 hours
+• You'll receive updates here
 
-📍 For faster service, please share your location when asked.
+📍 For faster service, please share your location.
 
-Thank you for helping us improve our service!
+Thank you for helping us improve!
 
 Type *MENU* for other options.`);
     
@@ -486,6 +883,9 @@ Meter: ${meterNumber}
 ─────────────────
 *Total Paid (6 months)*: P1,062.00
 
+*Average Monthly Usage:* 18 m³
+*Average Monthly Bill:* P177.00
+
 💡 *Need a detailed statement?*
 Visit any WUC office or call 0800 600 222
 
@@ -498,16 +898,19 @@ Type *MENU* for other options.`);
 async function handleIncoming(from, text) {
     console.log(`📱 ${from}: "${text}"`);
     
-    // Store message
     db.run(`INSERT INTO messages_log (user_phone, message, direction) VALUES (?, ?, 'incoming')`, [from, text]);
-    
-    // Update user
     db.run(`INSERT INTO users (phone, last_active) VALUES (?, CURRENT_TIMESTAMP) 
             ON CONFLICT(phone) DO UPDATE SET last_active=CURRENT_TIMESTAMP`, [from]);
     
     const lower = text.toLowerCase().trim();
     const session = sessions[from] || { step: 'menu' };
     sessions[from] = session;
+    
+    // Get user's area from database
+    let userArea = 'Gaborone';
+    db.get(`SELECT area FROM users WHERE phone = ?`, [from], (err, row) => {
+        if (row && row.area) userArea = row.area;
+    });
     
     // Cancel command
     if (lower === 'cancel') {
@@ -533,6 +936,72 @@ Type *MENU* to see options.`);
         return;
     }
     
+    // Alert subscriptions
+    if (lower === 'alerts' || lower === 'alerts on') {
+        await subscribeAlerts(from, 'on');
+        return;
+    }
+    if (lower === 'alerts off') {
+        await subscribeAlerts(from, 'off');
+        return;
+    }
+    
+    // Water supply status
+    if (lower === 'status' || lower === 'water status' || lower === 'supply status') {
+        await waterSupplyStatus(from, userArea);
+        return;
+    }
+    
+    // New connection
+    if (lower === 'connect' || lower === 'new connection') {
+        await newConnection(from, 'info');
+        return;
+    }
+    if (lower === 'apply') {
+        await newConnection(from, 'apply');
+        return;
+    }
+    
+    // Tariff calculator
+    if (lower === 'tariff' || lower === 'rates') {
+        await tariffCalculator(from, null);
+        return;
+    }
+    if (lower.startsWith('calculate')) {
+        const usage = text.split(' ')[1];
+        await tariffCalculator(from, usage);
+        return;
+    }
+    
+    // Find office
+    if (lower === 'office' || lower === 'find office' || lower === 'location') {
+        await findOffice(from, null);
+        return;
+    }
+    if (lower.startsWith('office ')) {
+        const location = text.split(' ').slice(1).join(' ');
+        await findOffice(from, location);
+        return;
+    }
+    
+    // Water saving tips
+    if (lower === 'tips' || lower === 'water tips') {
+        await waterSavingTips(from, null);
+        return;
+    }
+    if (lower === 'tips home') {
+        await waterSavingTips(from, 'home');
+        return;
+    }
+    if (lower === 'tips garden') {
+        await waterSavingTips(from, 'garden');
+        return;
+    }
+    if (lower === 'tips leaks') {
+        await waterSavingTips(from, 'leaks');
+        return;
+    }
+    
     // Handle active sessions
     if (session.step === 'awaiting_meter') {
         const meterMatch = text.toUpperCase().match(/[A-Z]{3}-\d{5}/);
@@ -542,15 +1011,16 @@ Type *MENU* to see options.`);
             if (account) {
                 session.meter = meter;
                 session.step = 'menu';
-                db.run(`UPDATE users SET meter_number = ? WHERE phone = ?`, [meter, from]);
-                await sendWhatsApp(from, `✅ *ACCOUNT LINKED SUCCESSFULLY* ✅
+                db.run(`UPDATE users SET meter_number = ?, area = ? WHERE phone = ?`, [meter, account.area, from]);
+                await sendWhatsApp(from, `✅ *ACCOUNT LINKED* ✅
 
 Meter: ${meter}
 Name: ${account.name}
 Balance: P${account.balance}
 Area: ${account.area}
 
-Type *MENU* for options or *BALANCE* to check your bill.`);
+Type *MENU* for options
+Type *STATUS* for water supply in ${account.area}`);
             } else {
                 await sendWhatsApp(from, `❌ Meter "${meter}" not found. Please try again.`);
             }
@@ -600,12 +1070,13 @@ Type *MENU* for options or *BALANCE* to check your bill.`);
         const account = accounts[meter];
         if (account) {
             session.meter = meter;
-            db.run(`UPDATE users SET meter_number = ? WHERE phone = ?`, [meter, from]);
+            db.run(`UPDATE users SET meter_number = ?, area = ? WHERE phone = ?`, [meter, account.area, from]);
             await sendWhatsApp(from, `✅ *METER LINKED* ✅
 
 Meter: ${meter}
 Name: ${account.name}
 Balance: P${account.balance}
+Area: ${account.area}
 
 Type *MENU* for options.`);
         } else {
@@ -623,7 +1094,7 @@ Type *MENU* for options.`);
         } else {
             await sendWhatsApp(from, `🔑 *METER REQUIRED* 🔑
 
-Please enter your meter number to check your balance.
+Please enter your meter number.
 Example: GBE-00412`);
             session.step = 'awaiting_meter';
         }
@@ -636,7 +1107,7 @@ Example: GBE-00412`);
         } else {
             await sendWhatsApp(from, `🔑 *METER REQUIRED* 🔑
 
-Please enter your meter number to make a payment.
+Please enter your meter number.
 Example: GBE-00412`);
             session.step = 'awaiting_meter';
         }
@@ -658,15 +1129,46 @@ Example: GBE-00412`);
         return;
     }
     
+    if (lower === '6' || lower === 'water status' || lower === 'supply') {
+        await waterSupplyStatus(from, userArea);
+        return;
+    }
+    
+    if (lower === '7' || lower === 'connect' || lower === 'new connection') {
+        await newConnection(from, 'info');
+        return;
+    }
+    
+    if (lower === '8' || lower === 'tariff' || lower === 'calculate') {
+        await tariffCalculator(from, null);
+        return;
+    }
+    
+    if (lower === '9' || lower === 'office' || lower === 'find office') {
+        await findOffice(from, null);
+        return;
+    }
+    
+    if (lower === '10' || lower === 'tips' || lower === 'water tips') {
+        await waterSavingTips(from, null);
+        return;
+    }
+    
     // Default response
     await sendWhatsApp(from, `❌ *COMMAND NOT RECOGNIZED* ❌
 
 I didn't understand "${text}".
 
-📋 Type *MENU* to see available options
+📋 Type *MENU* to see all options
 🆘 Type *HELP* for assistance
+📞 Call our hotline: 0800 600 222
 
-📞 Or call our hotline: 0800 600 222`);
+*Quick commands:*
+• STATUS - Water supply in your area
+• TARIFF - Water rates
+• OFFICE - Find WUC branch
+• TIPS - Water saving advice
+• CONNECT - New connection info`);
 }
 
 // ========================================
@@ -713,10 +1215,13 @@ app.get('/api/stats', (req, res) => {
     db.get(`SELECT COUNT(*) as users FROM users`, (err, users) => {
         db.get(`SELECT COUNT(*) as faults FROM faults WHERE status='pending'`, (err, faults) => {
             db.get(`SELECT COUNT(*) as readings FROM meter_readings WHERE approved=0`, (err, readings) => {
-                res.json({ 
-                    totalUsers: users?.users || 0, 
-                    pendingFaults: faults?.faults || 0,
-                    pendingReadings: readings?.readings || 0
+                db.get(`SELECT COUNT(*) as connections FROM new_connections WHERE status='pending'`, (err, connections) => {
+                    res.json({ 
+                        totalUsers: users?.users || 0, 
+                        pendingFaults: faults?.faults || 0,
+                        pendingReadings: readings?.readings || 0,
+                        pendingConnections: connections?.connections || 0
+                    });
                 });
             });
         });
@@ -788,4 +1293,10 @@ app.listen(PORT, () => {
     console.log(`\n✅ Server running on port ${PORT}`);
     console.log(`📱 Webhook: https://water-botswana-production.up.railway.app/webhook`);
     console.log(`📊 Dashboard: https://water-botswana-production.up.railway.app/dashboard`);
+    console.log(`\n💡 New Features Added:`);
+    console.log(`   6️⃣ Water Supply Status`);
+    console.log(`   7️⃣ New Connection`);
+    console.log(`   8️⃣ Tariff Calculator`);
+    console.log(`   9️⃣ Find WUC Office`);
+    console.log(`   🔟 Water Saving Tips`);
 });
