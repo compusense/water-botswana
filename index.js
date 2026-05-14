@@ -64,7 +64,7 @@ db.serialize(() => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
     
-    // Insert sample data for testing
+    // Insert sample data if empty
     db.get(`SELECT COUNT(*) as count FROM users`, (err, row) => {
         if (row.count === 0) {
             db.run(`INSERT INTO users (phone, meter_number, name, area) VALUES 
@@ -189,15 +189,13 @@ dashboardApp.get('/api/analytics', (req, res) => {
 dashboardApp.post('/api/ingest', (req, res) => {
     const { phone, message, direction, meterNumber, faultData, readingData } = req.body;
     
-    console.log(`📥 Ingest: ${phone} - ${direction} - ${message?.substring(0, 50)}`);
+    console.log(`📥 Ingest: ${phone} - ${direction}`);
     
-    // Store message
     if (message) {
         db.run(`INSERT INTO messages_log (user_phone, direction, message) VALUES (?, ?, ?)`,
             [phone, direction, message.substring(0, 500)]);
     }
     
-    // Update or create user
     db.run(`INSERT INTO users (phone, meter_number, last_active) 
             VALUES (?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(phone) DO UPDATE SET 
@@ -205,15 +203,12 @@ dashboardApp.post('/api/ingest', (req, res) => {
             meter_number = COALESCE(?, meter_number)`,
         [phone, meterNumber, meterNumber]);
     
-    // Store fault if provided
     if (faultData) {
         db.run(`INSERT INTO faults (user_phone, fault_type, description, latitude, longitude, status) 
                 VALUES (?, ?, ?, ?, ?, 'pending')`,
             [phone, faultData.type, faultData.description, faultData.lat || null, faultData.lng || null]);
-        console.log(`📋 Fault stored: ${faultData.type}`);
     }
     
-    // Store reading if provided
     if (readingData) {
         db.run(`INSERT INTO meter_readings (user_phone, meter_number, reading, approved) 
                 VALUES (?, ?, ?, 0)`,
@@ -221,6 +216,11 @@ dashboardApp.post('/api/ingest', (req, res) => {
     }
     
     res.json({ success: true });
+});
+
+// Logout endpoint
+dashboardApp.post('/api/logout', (req, res) => {
+    res.json({ success: true, redirect: '/' });
 });
 
 // Serve dashboard pages
@@ -275,9 +275,8 @@ async function sendToDashboard(phone, message, direction, meterNumber = null, fa
         await axios.post(`http://localhost:3001/api/ingest`, {
             phone, message, direction, meterNumber, faultData, readingData
         }, { timeout: 2000 });
-        console.log(`📊 Data sent to dashboard`);
     } catch(error) {
-        console.log(`⚠️ Dashboard not available: ${error.message}`);
+        // Dashboard may not be running, ignore
     }
 }
 
@@ -285,7 +284,6 @@ async function sendToDashboard(phone, message, direction, meterNumber = null, fa
 async function handleMessage(from, message, msgType, mediaInfo = null) {
     console.log(`📱 ${from}: ${msgType}`);
     
-    // Initialize session
     if (!sessions[from]) {
         sessions[from] = { step: 'menu', meter: null };
         await sendToDashboard(from, 'User started conversation', 'incoming');
@@ -298,14 +296,13 @@ async function handleMessage(from, message, msgType, mediaInfo = null) {
         text = message?.body?.toLowerCase().trim() || '';
     }
     
-    // Store message in dashboard
     if (text) {
         await sendToDashboard(from, text, 'incoming', session.meter);
     }
     
-    // Menu command
-if (text === 'hi' || text === 'menu' || text === 'start') {
-    await sendMessage(from, `💧 *WATER UTILITIES CORPORATION - BOTSWANA* 💧
+    // MENU command
+    if (text === 'hi' || text === 'menu' || text === 'start' || text === 'hello') {
+        await sendMessage(from, `💧 *WATER UTILITIES CORPORATION - BOTSWANA* 💧
 
 *"We keep it flowing, for you."*
 
@@ -324,8 +321,8 @@ if (text === 'hi' || text === 'menu' || text === 'start') {
 Type your meter number (e.g., GBE-00412) to link your account.
 
 *Serving Botswana with Excellence since 1970*`);
-    return;
-}
+        return;
+    }
     
     // Check Balance
     if (text === '1' || text === 'balance' || text === 'check balance') {
@@ -587,7 +584,6 @@ const BOT_PORT = 3000;
 
 dashboardApp.listen(DASHBOARD_PORT, () => {
     console.log(`📊 Dashboard: http://localhost:${DASHBOARD_PORT}/dashboard`);
-    console.log(`🔗 API: http://localhost:${DASHBOARD_PORT}/api`);
 });
 
 botApp.listen(BOT_PORT, () => {
@@ -596,5 +592,3 @@ botApp.listen(BOT_PORT, () => {
 });
 
 console.log(`\n✅ ALL SERVICES STARTED SUCCESSFULLY!`);
-console.log(`📊 Dashboard URL: https://water-botswana-production.up.railway.app/dashboard`);
-console.log(`🤖 Bot Webhook: https://water-botswana-production.up.railway.app/webhook`);
